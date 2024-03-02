@@ -58,13 +58,19 @@ async def ping(ctx):
 
 @bot.command()
 async def join(ctx):
-    voice_channel = ctx.author.voice.channel
-    vc = await voice_channel.connect()
+    if ctx.author.voice is None:
+        await ctx.send("You need to be in a voice channel to use this command.")
+    else:
+        voice_channel = ctx.author.voice.channel
+        vc = await voice_channel.connect()
 
 
 @bot.command()
 async def leave(ctx):
-    await ctx.voice_client.disconnect()
+    if ctx.voice_client is None:
+        await ctx.send("I am not in a voice channel.")
+    else:
+        await ctx.voice_client.disconnect()
 
 
 @bot.command()
@@ -125,7 +131,14 @@ async def playlist(ctx, *, playlist_url):
 
 
 @bot.command()
-async def play(ctx, *, track):
+async def play(ctx, *, track=None):
+    if track is None:
+        await ctx.send("Please specify a song to play.")
+        return
+
+    if ctx.author.voice is None:
+        await ctx.send("You need to be in a voice channel to use this command.")
+        return
     voice_channel = ctx.author.voice.channel
     vc = await voice_channel.connect()
 
@@ -139,6 +152,7 @@ async def play(ctx, *, track):
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f'{track}', download=False)
+            video_title = info['title']
             if 'entries' in info:
                 best_audio = max(info['entries'][0]['formats'], key=lambda format: format.get('abr') or 0)
                 url = best_audio['url'] 
@@ -152,7 +166,7 @@ async def play(ctx, *, track):
 
     source = discord.FFmpegPCMAudio(executable="ffmpeg", source=url, before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
     vc.play(source)
-    await ctx.send(f'Playing {track} in {voice_channel}')
+    await ctx.send(f'Playing {video_title} in {voice_channel!}')
 
     while vc.is_playing():
         await asyncio.sleep(1)
