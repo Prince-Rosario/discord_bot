@@ -10,7 +10,7 @@ from typing import Final as fnl
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 # import youtube_dl
-import yt_dlp as youtube_dl
+import yt_dlp
 from spotipy.exceptions import SpotifyException
 
 load_dotenv()
@@ -26,7 +26,7 @@ def get_meme():
     return json_data['url']
 
 
-bot = Bot(command_prefix='!', intents=discord.Intents.all())
+bot = Bot(command_prefix=os.getenv('DISCORD_PREFIX'), intents=discord.Intents.all())
 
 
 @bot.event
@@ -104,15 +104,16 @@ async def playlist(ctx, *, playlist_url):
         }
 
         try:
-            with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(f'{track_name} {track_artist}', download=False)
                 if 'formats' in info:
-                    url = info['formats'][0]['url']
+                    best_audio = max(info['entries'][0]['formats'], key=lambda format: format.get('abr', 0))
+                    url = best_audio['url']
                 else:
                     await ctx.send(f'Error: No formats found for {track_name} by {track_artist} on YouTube.')
                     continue
 
-        except youtube_dl.utils.DownloadError:
+        except yt_dlp.utils.DownloadError:
             await ctx.send(f'Error: Could not find {track_name} by {track_artist} on YouTube.')
             continue
 
@@ -129,31 +130,56 @@ async def play(ctx, *, track):
     vc = await voice_channel.connect()
 
     ydl_opts = {
-        'default_search': 'auto',  # this instructs yt_dlp to search YouTube
+        'default_search': 'ytsearch',  # this instructs yt_dlp to search YouTube
         'format': 'bestaudio/best',  # we only want the best quality audio
         'noplaylist': True,  # we don't want to download a playlist
         'quiet': True  # we don't want verbose output
     }
 
     try:
-        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f'{track}', download=False)
             if 'entries' in info:
-                url = info['entries'][0]['formats'][0]['url']
+                best_audio = max(info['entries'][0]['formats'], key=lambda format: format.get('abr') or 0)
+                url = best_audio['url'] 
                 print(url)
             else:
                 await ctx.send(f'Error: No formats found for {track} on YouTube.')
                 return
-    except youtube_dl.utils.DownloadError:
+    except yt_dlp.utils.DownloadError:
         await ctx.send(f'Error: Could not find {track} on YouTube.')
         return
 
-    vc.play(discord.FFmpegPCMAudio(executable="ffmpeg", source=url))
+    source = discord.FFmpegPCMAudio(executable="ffmpeg", source=url, before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
+    vc.play(source)
+    await ctx.send(f'Playing {track} in {voice_channel}')
 
     while vc.is_playing():
         await asyncio.sleep(1)
 
-    await ctx.send(f'Playing {track} in {voice_channel}')
+    
+@bot.command()
+async def pause(ctx):
+    voice_channel = ctx.author.voice.channel
+    vc = await voice_channel.connect()
+    vc.pause()
+    await ctx.send(f'Paused in {voice_channel}')
+
+
+@bot.command()
+async def resume(ctx):
+    voice_channel = ctx.author.voice.channel
+    vc = await voice_channel.connect()
+    vc.resume()
+    await ctx.send(f'Resumed in {voice_channel}')
+
+
+@bot.command()
+async def stop(ctx):
+    voice_channel = ctx.author.voice.channel
+    vc = await voice_channel.connect()
+    vc.stop()
+    await ctx.send(f'Stopped in {voice_channel}')
 
 
 @bot.command()
