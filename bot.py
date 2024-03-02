@@ -9,16 +9,15 @@ import os
 from typing import Final as fnl
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
-#import youtube_dl
-import yt_dlp as youtube_dl
+# import youtube_dl
+import yt_dlp
 from spotipy.exceptions import SpotifyException
-
 
 load_dotenv()
 TOKEN: fnl[str] = os.getenv('DISCORD_TOKEN')
 
-
-sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=os.getenv('SPOTIPY_CLIENT_ID'), client_secret=os.getenv('SPOTIPY_CLIENT_SECRET')))
+sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=os.getenv('SPOTIPY_CLIENT_ID'),
+                                                           client_secret=os.getenv('SPOTIPY_CLIENT_SECRET')))
 
 
 def get_meme():
@@ -26,38 +25,47 @@ def get_meme():
     json_data = json.loads(response.text)
     return json_data['url']
 
-bot = Bot(command_prefix = '!', intents=discord.Intents.all())
+
+bot = Bot(command_prefix=os.getenv('DISCORD_PREFIX'), intents=discord.Intents.all())
+
 
 @bot.event
 async def on_ready():
     print('Logged in as {0}!'.format(bot.user))
 
+
 @bot.command()
-async def clear (ctx, limit = 100):
+async def clear(ctx, limit=100):
     await ctx.channel.purge(limit=limit)
     embed = discord.Embed(title=f'Deleted {limit} messages in this channel.')
-    await ctx.send(embed = embed)
+    await ctx.send(embed=embed)
+
 
 @bot.command()
 async def hello(ctx):
     await ctx.send('Hello! I am a bot. Type !Help for a list of commands.')
 
+
 @bot.command()
 async def meme(ctx):
     await ctx.send(get_meme())
 
+
 @bot.command()
 async def ping(ctx):
     await ctx.send(f'Pong! {round(bot.latency * 1000)}ms')
+
 
 @bot.command()
 async def join(ctx):
     voice_channel = ctx.author.voice.channel
     vc = await voice_channel.connect()
 
+
 @bot.command()
 async def leave(ctx):
-    await ctx.voice_client.disconnect()    
+    await ctx.voice_client.disconnect()
+
 
 @bot.command()
 async def playlist(ctx, *, playlist_url):
@@ -68,7 +76,7 @@ async def playlist(ctx, *, playlist_url):
     else:
         await ctx.send('Invalid Spotify playlist URL.')
         return
-    
+
     results = sp.playlist(playlist_id)
     print(results)
 
@@ -77,35 +85,35 @@ async def playlist(ctx, *, playlist_url):
     if 'items' in results['tracks']:
         tracks = [item['track'] for item in results['tracks']['items']]
     else:
-        await ctx.send('No tracks found in the playlist.')        
+        await ctx.send('No tracks found in the playlist.')
 
     voice_channel = ctx.author.voice.channel
     vc = await voice_channel.connect()
 
     for item in tracks:
         if isinstance(item, dict):
-                    track_name = item['name']
-                    track_artist = item['artists'][0]['name']
+            track_name = item['name']
+            track_artist = item['artists'][0]['name']
         else:
             print(f'unexpected track data: {item}')
 
-
         ydl_opts = {
-             'default_search' : 'ytsearch', 
-             'quiet' : True, 
-             'format': 'bestaudio/best'
-             }
-        
+            'default_search': 'ytsearch',
+            'quiet': True,
+            'format': 'bestaudio/best'
+        }
+
         try:
-            with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(f'{track_name} {track_artist}', download=False)
                 if 'formats' in info:
-                        url = info['formats'][0]['url']
+                    best_audio = max(info['entries'][0]['formats'], key=lambda format: format.get('abr', 0))
+                    url = best_audio['url']
                 else:
                     await ctx.send(f'Error: No formats found for {track_name} by {track_artist} on YouTube.')
                     continue
 
-        except youtube_dl.utils.DownloadError:
+        except yt_dlp.utils.DownloadError:
             await ctx.send(f'Error: Could not find {track_name} by {track_artist} on YouTube.')
             continue
 
@@ -113,7 +121,7 @@ async def playlist(ctx, *, playlist_url):
         while vc.is_playing():
             await asyncio.sleep(1)
 
-    await ctx.send(f'Playing {results["name"]} in {voice_channel}')        
+    await ctx.send(f'Playing {results["name"]} in {voice_channel}')
 
 
 @bot.command()
@@ -122,31 +130,57 @@ async def play(ctx, *, track):
     vc = await voice_channel.connect()
 
     ydl_opts = {
-        'default_search': 'auto',  # this instructs yt_dlp to search YouTube
+        'default_search': 'ytsearch',  # this instructs yt_dlp to search YouTube
         'format': 'bestaudio/best',  # we only want the best quality audio
         'noplaylist': True,  # we don't want to download a playlist
         'quiet': True  # we don't want verbose output
     }
 
     try:
-        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f'{track}', download=False)
             if 'entries' in info:
-                url = info['entries'][0]['formats'][0]['url']
+                best_audio = max(info['entries'][0]['formats'], key=lambda format: format.get('abr') or 0)
+                url = best_audio['url'] 
                 print(url)
             else:
                 await ctx.send(f'Error: No formats found for {track} on YouTube.')
                 return
-    except youtube_dl.utils.DownloadError:
+    except yt_dlp.utils.DownloadError:
         await ctx.send(f'Error: Could not find {track} on YouTube.')
         return
 
-    vc.play(discord.FFmpegPCMAudio(executable="ffmpeg", source=url))
-    
+    source = discord.FFmpegPCMAudio(executable="ffmpeg", source=url, before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
+    vc.play(source)
+    await ctx.send(f'Playing {track} in {voice_channel}')
+
     while vc.is_playing():
         await asyncio.sleep(1)
 
-    await ctx.send(f'Playing {track} in {voice_channel}')
+    
+@bot.command()
+async def pause(ctx):
+    voice_channel = ctx.author.voice.channel
+    vc = await voice_channel.connect()
+    vc.pause()
+    await ctx.send(f'Paused in {voice_channel}')
+
+
+@bot.command()
+async def resume(ctx):
+    voice_channel = ctx.author.voice.channel
+    vc = await voice_channel.connect()
+    vc.resume()
+    await ctx.send(f'Resumed in {voice_channel}')
+
+
+@bot.command()
+async def stop(ctx):
+    voice_channel = ctx.author.voice.channel
+    vc = await voice_channel.connect()
+    vc.stop()
+    await ctx.send(f'Stopped in {voice_channel}')
+
 
 @bot.command()
 async def Help(ctx):
@@ -159,5 +193,6 @@ async def Help(ctx):
     embed.add_field(name='!join', value='Joins the user\'s voice channel', inline=False)
     embed.add_field(name='!leave', value='Leaves the voice channel', inline=False)
     await ctx.send(embed=embed)
+
 
 bot.run(TOKEN)
