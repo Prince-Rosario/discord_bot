@@ -2,7 +2,11 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+<<<<<<< HEAD
       <module fileurl="file://$PROJECT_DIR$/.idea/discord_bot.iml" filepath="$PROJECT_DIR$/.idea/discord_bot.iml" />
+=======
+      <module fileurl="file://$PROJECT_DIR$/.idea/pythonProject.iml" filepath="$PROJECT_DIR$/.idea/pythonProject.iml" />
+>>>>>>> e67d1b8aa2a24abd4b2d8ed537eb10ba8b04e246
     </modules>
   </component>
 </project>
