@@ -57,12 +57,14 @@ def get_welcome_channel(guild_id):
     return result[0] if result else None
 
 def search_val_skin(skin_name):
-    KEY = os.getenv('VALPY-KEY')
-    val = valorant.Client(KEY, locale='en-US')
-    skins = val.get_skins()
-    results = skins.find_all(name=lambda x: skin_name.lower() in x.lower())
-    print (results)
-    matching_skins = [skin for skin in results if skin_name.lower() in skin.name.lower()]
+    response = requests.get('https://valorant-api.com/v1/weapons/skins')
+    data = response.json()
+
+    matching_skins = []
+    for skin in data['data']:
+        if skin_name.lower() in skin['displayName'].lower():
+            matching_skins.append(skin)
+
     return matching_skins
 
 
@@ -218,8 +220,9 @@ async def valskin(ctx, *, skin_name: str):
     skins = search_val_skin(skin_name)
     if skins:
         for skin in skins:
-                embed = discord.Embed(title=skin.name, color=0x00ff00)
-                await ctx.send(embed=embed)
+            embed = discord.Embed(title=skin['displayName'], color=0x00ff00)
+            embed.set_image(url=skin['displayIcon'])  # Set the image
+            await ctx.send(embed=embed)
     else:
         await ctx.send(f'No skin found for "{skin_name}".')
 '''
