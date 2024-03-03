@@ -1,5 +1,6 @@
 import asyncio
 import re
+from urllib.parse import urlparse
 import discord
 import requests
 import json
@@ -356,17 +357,25 @@ async def play(ctx, *, track=None):
         vc = ctx.voice_client
 
     ydl_opts = {
-        'default_search': 'ytsearch',  # this instructs yt_dlp to search YouTube
-        'format': 'bestaudio/best',  # we only want the best quality audio
-        'noplaylist': True,  # we don't want to download a playlist
-        'quiet': True  # we don't want verbose output
+        'format': 'bestaudio/best',
+        'noplaylist': True,
+        'quiet': True,
+        'geo_bypass': True,
+        'nocheckcertificate': True
     }
+
+    if urlparse(track).scheme and urlparse(track).netloc:
+        ydl_opts['default_search'] = ''
+        parsed_url = urlparse(track)
+        track = f'{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}'
+    else:
+        ydl_opts['default_search'] = 'ytsearch'
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f'{track}', download=False)
             
-            if 'entries' in info:
+            if 'entries' in info and len(info['entries']) > 0:  # check if 'entries' is not empty
                 video_title = info['entries'][0]['title']
                 best_audio = max(info['entries'][0]['formats'], key=lambda format: format.get('abr') or 0)
                 url = best_audio['url'] 
@@ -385,49 +394,78 @@ async def play(ctx, *, track=None):
     if not vc.is_playing():
         await start_playing(ctx, ctx.guild.id, vc, voice_channel)
 
-    source = discord.FFmpegPCMAudio(executable="ffmpeg", source=url, before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
-    vc.play(source)
-    await ctx.send(f'Playing {video_title} in {voice_channel}')
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=f"{video_title}"))
-    video_titles[ctx.guild.id] = video_title
-
-    while vc.is_playing():
-        await asyncio.sleep(1)
-    await bot.change_presence(activity=discord.Game(name="!Help for commands"))
+currently_playing = {}
 
 async def start_playing(ctx, guild_id, vc, voice_channel):
+    if not queues[guild_id]:  # If the queue is empty, return
+        return
+
     url, video_title = queues[guild_id].pop(0)
     source = discord.FFmpegPCMAudio(executable="ffmpeg", source=url, before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
-    vc.play(source, after=lambda e: start_playing(ctx, guild_id, vc, voice_channel) if e is None else None)
+
+    currently_playing[guild_id] = video_title  # Store the currently playing song
+
+    def after_callback(e):
+        if e:  # If an error occurred, print it out
+            print(f'Error in playback: {e}')
+        coro = start_playing(ctx, guild_id, vc, voice_channel)  # Schedule the next song to play
+        fut = asyncio.run_coroutine_threadsafe(coro, bot.loop)
+        try:
+            fut.result()
+        except:
+            # an error was raised during the execution of the coroutine
+            pass
+
+    vc.play(source, after=after_callback)
     await ctx.send(f'Playing {video_title} in {voice_channel}')
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=f"{video_title}"))
 
 
 @bot.command()
-async def pause(ctx):
-    
+async def skip(ctx):
     if ctx.voice_client is None:
         await ctx.send("I am not in a voice channel.")
     else:
+        current_song = currently_playing.get(ctx.guild.id, "None")  # Get the currently playing song
+        ctx.voice_client.stop()
+        await ctx.send(f"Skipped {current_song} in {ctx.author.voice.channel}")
+        await start_playing(ctx, ctx.guild.id, ctx.voice_client, ctx.author.voice.channel)
+
+@bot.command()
+async def queue(ctx):
+    if not queues.get(ctx.guild.id):
+        await ctx.send("The queue is empty.")
+    else:
+        queue_str = "\n".join([title for url, title in queues[ctx.guild.id]])
+        await ctx.send(f"Current queue:\n{queue_str}")
+
+@bot.command()
+async def pause(ctx):
+    if ctx.voice_client is None:
+        await ctx.send("I am not in a voice channel.")
+    else:
+        current_song = currently_playing.get(ctx.guild.id, "None")  # Get the currently playing song
         ctx.voice_client.pause()
-        await ctx.send(f'Paused {video_titles.get(ctx.guild.id)} in {ctx.author.voice.channel}')
-        await bot.change_presence(activity=discord.Game(name="!Help for commands"))
+        await ctx.send(f"Paused {current_song} in {ctx.author.voice.channel}")
 
 @bot.command()
 async def resume(ctx):
     if ctx.voice_client is None:
         await ctx.send("I am not in a voice channel.")
     else:
+        current_song = currently_playing.get(ctx.guild.id, "None")  # Get the currently playing song
         ctx.voice_client.resume()
-        await ctx.send(f'Resumed {video_titles.get(ctx.guild.id)} in {ctx.author.voice.channel}')
-        await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=f"{video_titles.get(ctx.guild.id)}"))
+        await ctx.send(f"Resumed {current_song} in {ctx.author.voice.channel}")
+
 @bot.command()
 async def stop(ctx):
     if ctx.voice_client is None:
         await ctx.send("I am not in a voice channel.")
     else:
+        current_song = currently_playing.get(ctx.guild.id, "None")  # Get the currently playing song
+        queues[ctx.guild.id] = []  # Clear the queue
         ctx.voice_client.stop()
-        await ctx.send(f'Stopped {video_titles.get(ctx.guild.id)} in {ctx.author.voice.channel}')
+        await ctx.send(f"Stopped {current_song} in {ctx.author.voice.channel}")
         await bot.change_presence(activity=discord.Game(name="!Help for commands"))
 
 
