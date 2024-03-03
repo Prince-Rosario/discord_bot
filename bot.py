@@ -416,7 +416,7 @@ async def stop(ctx):
 @bot.command()
 async def Help(ctx):
     embed = discord.Embed(title='Help', description='List of available commands:', color=0x014e9d)
-    embed.add_field(name='!hello', value='Greets the user', inline=False)
+    embed.add_field(name='!hello / !hi', value='Greets the user', inline=False)
     embed.add_field(name='!meme', value='Sends a random meme', inline=False)
     embed.add_field(name='!ping', value='Returns the latency', inline=False)
     embed.add_field(name='!clear', value='Clears the chat', inline=False)
