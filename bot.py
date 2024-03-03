@@ -12,6 +12,11 @@ from spotipy.oauth2 import SpotifyClientCredentials
 # import youtube_dl
 import yt_dlp
 from spotipy.exceptions import SpotifyException
+from discord.ext import commands 
+from discord.ext import menus
+import sqlite3
+
+import valorant
 
 load_dotenv()
 TOKEN: fnl[str] = os.getenv('DISCORD_TOKEN')
@@ -20,10 +25,131 @@ sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=os.getenv('
                                                            client_secret=os.getenv('SPOTIPY_CLIENT_SECRET')))
 
 
+conn = sqlite3.connect('settings.db')
+c = conn.cursor()
+c.execute('''
+    CREATE TABLE IF NOT EXISTS settings (
+        guild_id INTEGER PRIMARY KEY,
+        welcome_channel_id INTEGER
+    )
+''')
+
+
+def set_welcome_channel(guild_id, channel_id):
+    print(f'Setting welcome channel: guild_id={guild_id}, channel_id={channel_id}')
+    try:
+        c.execute('''
+            INSERT OR REPLACE INTO settings (guild_id, welcome_channel_id)
+            VALUES (?, ?)
+        ''', (guild_id, channel_id))
+        conn.commit()
+        print('Welcome channel set successfully')
+    except Exception as e:
+        print(f'Error setting welcome channel: {e}')
+
+def get_welcome_channel(guild_id):
+    c.execute('''
+        SELECT welcome_channel_id
+        FROM settings
+        WHERE guild_id = ?
+    ''', (guild_id,))
+    result = c.fetchone()
+    return result[0] if result else None
+
+def search_val_skin(skin_name):
+    KEY = os.getenv('VALPY-KEY')
+    val = valorant.Client(KEY, locale='en-US')
+    skins = val.get_skins()
+    results = skins.find_all(name=lambda x: skin_name.lower() in x.lower())
+    print (results)
+    matching_skins = [skin for skin in results if skin_name.lower() in skin.name.lower()]
+    return matching_skins
+
+
+'''todo: implement player stats'''
+'''
+def get_val_player_stats(player_name):
+    KEY = os.getenv('VALPY-KEY')
+    val = valorant.Client(KEY, locale='en-US')
+    player = val.get_user_by_name(player_name)
+
+    matches = player.matchlist().history.fine(queueId='competitive')
+
+    if not matches:
+        return "No matches found"
+
+    stats = ""
+    for match in matches:
+        match_details = match.get()
+        for team in match_details.teams:
+            if team.winner:
+                stats += f"{team.teamId} Team's Ranks:\n"
+                players = match_details.players.get_all(teamId=team.teamId)
+                for player in players:
+                    stats += f"\t{player.gameName} - {player.rank}\n"
+    return stats
+'''    
+
+class WelcomeChannelMenu(menus.Menu):
+    async def send_initial_message(self, ctx, channel):
+        return await channel.send('React with 📝 to set the current channel as the welcome channel.')
+
+    @menus.button('📝')
+    async def on_set_welcome_channel(self, payload):
+        set_welcome_channel(payload.guild_id, payload.channel_id)
+        await self.message.edit(content=f'Successfully set the welcome channel to <#{payload.channel_id}>.')
+
+
 def get_meme():
     response = requests.get('https://meme-api.com/gimme')
     json_data = json.loads(response.text)
     return json_data['url']
+
+
+
+def get_random_usless_fact():
+    response = requests.get('https://uselessfacts.jsph.pl/random.json?language=en')
+    json_data = json.loads(response.text)
+    return json_data['text']
+
+def get_adop():
+    try:
+        params = {'api_key': os.getenv('NASA_API_KEY') }
+        response = requests.get('https://api.nasa.gov/planetary/apod', params=params)
+        response.raise_for_status()  # Raises a HTTPError if the response status is 4xx, 5xx
+
+        json_data = response.json()
+        return json_data['url']
+    except requests.exceptions.HTTPError as http_err:
+        print(f'HTTP error occurred: {http_err}') 
+        return 'an http error' # Python 3.6
+    except requests.exceptions.RequestException as err:
+        print(f'Error occurred: {err}')
+        return 'An unknown error occurred.'  # Python 3.6
+    except Exception as err:
+        print(f'Other error occurred: {err}') 
+        return 'An unknown error occurred.'
+
+
+def get_nasa_images(query):
+    try:
+        params = {'q': query}
+        response = requests.get('https://images-api.nasa.gov/search', params=params)
+        response.raise_for_status()  # Raises a HTTPError if the response status is 4xx, 5xx
+
+        json_data = response.json()
+        items = json_data.get('collection', {}).get('items', [])
+        urls = [item['links'][0]['href'] for item in items if 'links' in item and item['links'] and item['data'][0]['media_type'] == 'image']
+        return '\n'.join(urls[:5])  # Return only the first 5 URLs
+    except requests.exceptions.HTTPError as http_err:
+        print(f'HTTP error occurred: {http_err}') 
+        return 'An HTTP error occurred.'
+    except requests.exceptions.RequestException as err:
+        print(f'Error occurred: {err}')
+        return 'A request error occurred.'
+    except Exception as err:
+        print(f'Other error occurred: {err}') 
+        return 'An unknown error occurred.'
 
 
 bot = Bot(command_prefix=os.getenv('DISCORD_PREFIX'), intents=discord.Intents.all())
@@ -32,6 +158,7 @@ bot = Bot(command_prefix=os.getenv('DISCORD_PREFIX'), intents=discord.Intents.al
 @bot.event
 async def on_ready():
     print('Logged in as {0}!'.format(bot.user))
+    await bot.change_presence(activity=discord.Game(name="!Help for commands"))
 
 
 @bot.command()
@@ -41,15 +168,18 @@ async def clear(ctx, limit=100):
     await ctx.send(embed=embed)
 
 
-@bot.command()
-async def hello(ctx):
-    await ctx.send('Hello! I am a bot. Type !Help for a list of commands.')
+@bot.command(aliases=['hello', 'hi'])
+async def greet(ctx):
+    await ctx.send('Hello! nan thaan leo dasu! !Help use pani na ena panuven nu therinjukko!')
 
 
 @bot.command()
 async def meme(ctx):
     await ctx.send(get_meme())
 
+@bot.command()
+async def fact(ctx):
+    await ctx.send(get_random_usless_fact())
 
 @bot.command()
 async def ping(ctx):
@@ -73,6 +203,80 @@ async def leave(ctx):
         await ctx.voice_client.disconnect()
 
 
+@bot.command()
+async def adop(ctx):
+    await ctx.send(get_adop())
+
+
+@bot.command()
+async def nasa(ctx, *, query: str):
+    await ctx.send(get_nasa_images(query))
+
+
+@bot.command()
+async def valskin(ctx, *, skin_name: str):
+    skins = search_val_skin(skin_name)
+    if skins:
+        for skin in skins:
+                embed = discord.Embed(title=skin.name, color=0x00ff00)
+                await ctx.send(embed=embed)
+    else:
+        await ctx.send(f'No skin found for "{skin_name}".')
+'''
+@bot.command()
+async def valstats(ctx, *, player_name: str):
+    stats = get_val_player_stats(player_name)
+    await ctx.send(stats)'''
+
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def welcome_channel_menu(ctx):
+    await WelcomeChannelMenu().start(ctx)
+
+@bot.event
+async def on_member_join(member):
+    channel_id = get_welcome_channel(member.guild.id)
+    if channel_id:
+        channel = bot.get_channel(channel_id)
+        if channel:
+            await channel.send(f'Welcome to the server, {member.name}!')
+
+@bot.event
+async def on_member_remove(member):
+    channel_id = get_welcome_channel(member.guild.id)
+    if channel_id:
+        channel = bot.get_channel(channel_id)
+        if channel:
+            await channel.send(f'Goodbye, {member.name}!')
+
+
+@bot.event
+async def on_member_update(before, after):
+    if before.nick != after.nick:
+        print(f'{before.nick} changed their nickname to {after.nick}')
+
+
+@bot.event
+async def on_member_ban(guild, user):
+    print(f'{user.name} was banned from {guild.name}')
+
+@bot.event
+async def on_member_unban(guild, user):
+    print(f'{user.name} was unbanned from {guild.name}')
+
+@bot.event
+async def on_member_timeout(member):
+    print(f'{member.name} timed out')
+
+@bot.event
+async def on_member_kick(member):
+    print(f'{member.name} was kicked')
+
+
+
+#TODO: Implement Spotify playlist support
+'''
 @bot.command()
 async def playlist(ctx, *, playlist_url):
     # Extract playlist ID from the URL
@@ -127,8 +331,9 @@ async def playlist(ctx, *, playlist_url):
         while vc.is_playing():
             await asyncio.sleep(1)
 
-    await ctx.send(f'Playing {results["name"]} in {voice_channel}')
+    await ctx.send(f'Playing {results["name"]} in {voice_channel}')'''
 
+video_titles = {}
 
 @bot.command()
 async def play(ctx, *, track=None):
@@ -139,8 +344,12 @@ async def play(ctx, *, track=None):
     if ctx.author.voice is None:
         await ctx.send("You need to be in a voice channel to use this command.")
         return
+    
     voice_channel = ctx.author.voice.channel
-    vc = await voice_channel.connect()
+    if ctx.voice_client is None:
+        vc = await voice_channel.connect()
+    else:
+        vc = ctx.voice_client
 
     ydl_opts = {
         'default_search': 'ytsearch',  # this instructs yt_dlp to search YouTube
@@ -152,8 +361,9 @@ async def play(ctx, *, track=None):
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f'{track}', download=False)
-            video_title = info['title']
+            
             if 'entries' in info:
+                video_title = info['entries'][0]['title']
                 best_audio = max(info['entries'][0]['formats'], key=lambda format: format.get('abr') or 0)
                 url = best_audio['url'] 
                 print(url)
@@ -166,34 +376,41 @@ async def play(ctx, *, track=None):
 
     source = discord.FFmpegPCMAudio(executable="ffmpeg", source=url, before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
     vc.play(source)
-    await ctx.send(f'Playing {video_title} in {voice_channel!}')
+    await ctx.send(f'Playing {video_title} in {voice_channel}')
+    #await bot.change_presence(activity=discord.Game(name=f"Playing {video_title}"))
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=f"{video_title}"))
+    video_titles[ctx.guild.id] = video_title
 
     while vc.is_playing():
         await asyncio.sleep(1)
-
+    await bot.change_presence(activity=discord.Game(name="!Help for commands"))
     
 @bot.command()
 async def pause(ctx):
-    voice_channel = ctx.author.voice.channel
-    vc = await voice_channel.connect()
-    vc.pause()
-    await ctx.send(f'Paused in {voice_channel}')
-
+    
+    if ctx.voice_client is None:
+        await ctx.send("I am not in a voice channel.")
+    else:
+        ctx.voice_client.pause()
+        await ctx.send(f'Paused {video_titles.get(ctx.guild.id)} in {ctx.author.voice.channel}')
+        await bot.change_presence(activity=discord.Game(name="!Help for commands"))
 
 @bot.command()
 async def resume(ctx):
-    voice_channel = ctx.author.voice.channel
-    vc = await voice_channel.connect()
-    vc.resume()
-    await ctx.send(f'Resumed in {voice_channel}')
-
-
+    if ctx.voice_client is None:
+        await ctx.send("I am not in a voice channel.")
+    else:
+        ctx.voice_client.resume()
+        await ctx.send(f'Resumed {video_titles.get(ctx.guild.id)} in {ctx.author.voice.channel}')
+        await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=f"{video_titles.get(ctx.guild.id)}"))
 @bot.command()
 async def stop(ctx):
-    voice_channel = ctx.author.voice.channel
-    vc = await voice_channel.connect()
-    vc.stop()
-    await ctx.send(f'Stopped in {voice_channel}')
+    if ctx.voice_client is None:
+        await ctx.send("I am not in a voice channel.")
+    else:
+        ctx.voice_client.stop()
+        await ctx.send(f'Stopped {video_titles.get(ctx.guild.id)} in {ctx.author.voice.channel}')
+        await bot.change_presence(activity=discord.Game(name="!Help for commands"))
 
 
 @bot.command()
