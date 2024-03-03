@@ -383,7 +383,7 @@ async def play(ctx, *, track=None):
     queues[ctx.guild.id].append((url, video_title))   
 
     if not vc.is_playing():
-        await start_playing(ctx.guild.id, vc)
+        await start_playing(ctx, ctx.guild.id, vc, voice_channel)
 
     source = discord.FFmpegPCMAudio(executable="ffmpeg", source=url, before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
     vc.play(source)
@@ -395,10 +395,10 @@ async def play(ctx, *, track=None):
         await asyncio.sleep(1)
     await bot.change_presence(activity=discord.Game(name="!Help for commands"))
 
-async def start_playing(guild_id, vc):
+async def start_playing(ctx, guild_id, vc, voice_channel):
     url, video_title = queues[guild_id].pop(0)
     source = discord.FFmpegPCMAudio(executable="ffmpeg", source=url, before_options='-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5')
-    vc.play(source, after=lambda e: start_playing(guild_id, vc) if e is None else None)
+    vc.play(source, after=lambda e: start_playing(ctx, guild_id, vc, voice_channel) if e is None else None)
     await ctx.send(f'Playing {video_title} in {voice_channel}')
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=f"{video_title}"))
 
