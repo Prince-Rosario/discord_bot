@@ -415,7 +415,7 @@ async def stop(ctx):
 
 @bot.command()
 async def Help(ctx):
-    embed = discord.Embed(title='Help', description='List of available commands:', color=0x00ff00)
+    embed = discord.Embed(title='Help', description='List of available commands:', color=0x014e9d)
     embed.add_field(name='!hello', value='Greets the user', inline=False)
     embed.add_field(name='!meme', value='Sends a random meme', inline=False)
     embed.add_field(name='!ping', value='Returns the latency', inline=False)
@@ -426,6 +426,12 @@ async def Help(ctx):
     embed.add_field(name='!stop', value='Stops the song', inline=False)
     embed.add_field(name='!join', value='Joins the user\'s voice channel', inline=False)
     embed.add_field(name='!leave', value='Leaves the voice channel', inline=False)
+    embed.add_field(name='!adop', value='Sends the Astronomy Picture of the Day', inline=False)
+    embed.add_field(name='!nasa', value='Searches for images on NASA\'s API', inline=False)
+    embed.add_field(name='!valskin', value='Searches for Valorant skins', inline=False) 
+    embed.add_field(name='!fact', value='Sends a random useless fact', inline=False)
+    embed.add_field(name='!welcome_channel_menu', value='Sets the welcome channel', inline=False)
+    embed.add_field(name='!Help', value='Displays this message', inline=False)
     await ctx.send(embed=embed)
 
 
