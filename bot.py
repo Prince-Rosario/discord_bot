@@ -334,7 +334,7 @@ async def on_member_remove(member):
 
 @bot.event
 async def on_voice_state_update(member, before, after):
-    timestamp = datetime.datetime.now().strftime('%I:%M %p %d-%m-%Y')
+    timestamp = int(datetime.datetime.now().timestamp())
     log_channel_id = get_log_channel(member.guild.id)
     if log_channel_id is not None:
         log_channel = bot.get_channel(log_channel_id)
@@ -351,17 +351,16 @@ async def on_voice_state_update(member, before, after):
             move_embed.set_author(name=member.name, icon_url=member.avatar.url)
             if before.channel is None and after.channel is not None:
                 join_embed.title = 'Joined Voice Channel'
-                join_embed.description = f'{member.name} joined voice channel {after.channel.name} at {timestamp}'
+                join_embed.description = f'{member.name} joined voice channel {after.channel.name} at <t:{timestamp}:F>'
                 await log_channel.send(embed=join_embed)
             elif before.channel is not None and after.channel is None:
                 left_embed.title = 'Left Voice Channel'
-                left_embed.description = f'{member.name} left voice channel {before.channel.name} at {timestamp}'
+                left_embed.description = f'{member.name} left voice channel {before.channel.name} at <t:{timestamp}:F>'
                 await log_channel.send(embed=left_embed)
             elif before.channel is not None and after.channel is not None:
                 move_embed.title = 'Moved Voice Channels'
-                move_embed.description = f'{member.name} moved from voice channel {before.channel.name} to {after.channel.name} at {timestamp}'
+                move_embed.description = f'{member.name} moved from voice channel {before.channel.name} to {after.channel.name} at <t:{timestamp}:F>'
                 await log_channel.send(embed=move_embed)
-
 
 @bot.event
 async def on_member_update(before, after):
