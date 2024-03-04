@@ -237,7 +237,7 @@ async def clear(ctx, limit=100):
 
 @bot.command(aliases=['hello', 'hi'])
 async def greet(ctx):
-    await ctx.send('Hello! nan thaan leo dasu! !Help use pani na ena panuven nu therinjukko!')
+    await ctx.send('Hello! the name is Leo das! use !Help to learn more!')
 
 @bot.command()
 @commands.has_permissions(administrator=True)
