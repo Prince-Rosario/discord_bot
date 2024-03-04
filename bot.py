@@ -17,7 +17,6 @@ from discord.ext import commands
 from discord.ext import menus
 import sqlite3
 
-import valorant
 
 load_dotenv()
 TOKEN: fnl[str] = os.getenv('DISCORD_TOKEN')
@@ -120,21 +119,6 @@ def get_advice():
     response = requests.get('https://api.adviceslip.com/advice')
     json_data = json.loads(response.text)
     return json_data['slip']['advice']
-
-def get_reddit_images(subreddit, limit=5):
-    url = f"https://www.reddit.com/r/{subreddit}/.json?limit={limit}"
-    headers = {'User-agent': 'Mozilla/5.0'}
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        posts = response.json()['data']['children']
-        images = [post['data']['url'] for post in posts if 'i.redd.it' in post['data']['url']]
-        return images
-    else:
-        return 'Error: Could not retrieve images.'
-
-# Usage
-print(get_reddit_images('wallpapers', 10))
-
 
 
 def get_random_usless_fact():
