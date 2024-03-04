@@ -343,18 +343,24 @@ async def on_voice_state_update(member, before, after):
                 return
             if before.channel is not None and before.channel.overwrites_for(member.guild.default_role).view_channel is False:
                 return
-            embed = Embed(colour=Colour.blue())
-            embed.set_author(name=member.name, icon_url=member.avatar.url)
+            join_embed = discord.Embed(color=discord.Colour.blue())
+            left_embed = discord.Embed(color=discord.Colour.red())
+            move_embed = discord.Embed(color=discord.Colour.gold())
+            join_embed.set_author(name=member.name, icon_url=member.avatar.url)
+            left_embed.set_author(name=member.name, icon_url=member.avatar.url)
+            move_embed.set_author(name=member.name, icon_url=member.avatar.url)
             if before.channel is None and after.channel is not None:
-                embed.title = 'Joined Voice Channel'
-                embed.description = f'{member.name} joined voice channel {after.channel.name} at {timestamp}'
+                join_embed.title = 'Joined Voice Channel'
+                join_embed.description = f'{member.name} joined voice channel {after.channel.name} at {timestamp}'
+                await log_channel.send(embed=join_embed)
             elif before.channel is not None and after.channel is None:
-                embed.title = 'Left Voice Channel'
-                embed.description = f'{member.name} left voice channel {before.channel.name} at {timestamp}'
+                left_embed.title = 'Left Voice Channel'
+                left_embed.description = f'{member.name} left voice channel {before.channel.name} at {timestamp}'
+                await log_channel.send(embed=left_embed)
             elif before.channel is not None and after.channel is not None:
-                embed.title = 'Moved Voice Channels'
-                embed.description = f'{member.name} moved from voice channel {before.channel.name} to {after.channel.name} at {timestamp}'
-            await log_channel.send(embed=embed)
+                move_embed.title = 'Moved Voice Channels'
+                move_embed.description = f'{member.name} moved from voice channel {before.channel.name} to {after.channel.name} at {timestamp}'
+                await log_channel.send(embed=move_embed)
 
 
 @bot.event
