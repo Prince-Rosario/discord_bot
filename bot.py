@@ -321,7 +321,13 @@ async def on_member_join(member):
     if channel_id:
         channel = bot.get_channel(channel_id)
         if channel:
-            await channel.send(f'Welcome to the server, {member.name}!')
+            embed = discord.Embed(
+                title="Welcome to the server!",
+                description=f"{member.name}, we're glad to have you here!",
+                color=discord.Color.green()
+            )
+            embed.set_thumbnail(url=member.avatar.url)
+            await channel.send(embed=embed)
 
 @bot.event
 async def on_member_remove(member):
@@ -329,7 +335,13 @@ async def on_member_remove(member):
     if channel_id:
         channel = bot.get_channel(channel_id)
         if channel:
-            await channel.send(f'Goodbye, {member.name}!')
+            embed = discord.Embed(
+                title="Goodbye!",
+                description=f"{member.name}, we're sad to see you go!",
+                color=discord.Color.red()
+            )
+            embed.set_thumbnail(url=member.avatar.url)
+            await channel.send(embed=embed)
 
 
 @bot.event
