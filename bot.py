@@ -545,10 +545,14 @@ async def Help(ctx):
     embed.add_field(name='!hello / !hi', value='Greets the user', inline=False)
     embed.add_field(name='!meme', value='Sends a random meme', inline=False)
     embed.add_field(name='!ping', value='Returns the latency', inline=False)
+    embed.add_field(name='!insult', value='Sends a random insult', inline=False)
+    embed.add_field(name='!advice', value='Sends a random advice', inline=False)
     embed.add_field(name='!clear', value='Clears the chat', inline=False)
     embed.add_field(name='!play', value='Plays a song in the user\'s voice channel', inline=False)
     embed.add_field(name='!pause', value='Pauses the song', inline=False)
     embed.add_field(name='!resume', value='Resumes the song', inline=False)
+    embed.add_field(name='!skip', value='Skips the current song', inline=False)
+    embed.add_field(name='!queue', value='Displays the current queue', inline=False)
     embed.add_field(name='!stop', value='Stops the song', inline=False)
     embed.add_field(name='!join', value='Joins the user\'s voice channel', inline=False)
     embed.add_field(name='!leave', value='Leaves the voice channel', inline=False)
@@ -557,7 +561,7 @@ async def Help(ctx):
     embed.add_field(name='!valskin', value='Searches for Valorant skins', inline=False) 
     embed.add_field(name='!fact', value='Sends a random useless fact', inline=False)
     embed.add_field(name='!welcome_channel_menu', value='Sets the welcome channel', inline=False)
-    embed.add_field(name='!Help', value='Displays this message', inline=False)
+    embed.add_field(name='!log_channel_menu', value='Sets the log channel', inline=False)
     await ctx.send(embed=embed)
 
 
