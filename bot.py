@@ -108,7 +108,18 @@ def get_meme():
     json_data = json.loads(response.text)
     return json_data['url']
 
+def get_insult():
+    response = requests.get('https://evilinsult.com/generate_insult.php?lang=en&type=json')
+    if response.status_code == 200:
+        data = response.json()
+        return data['insult']
+    else:
+        return 'Error: Could not retrieve insult.'
 
+def get_advice():
+    response = requests.get('https://api.adviceslip.com/advice')
+    json_data = json.loads(response.text)
+    return json_data['slip']['advice']
 
 def get_random_usless_fact():
     response = requests.get('https://uselessfacts.jsph.pl/random.json?language=en')
@@ -179,6 +190,14 @@ async def greet(ctx):
 @bot.command()
 async def meme(ctx):
     await ctx.send(get_meme())
+
+@bot.command()
+async def insult(ctx):
+    await ctx.send(get_insult())  
+
+@bot.command()
+async def advice(ctx):
+    await ctx.send(get_advice())
 
 @bot.command()
 async def fact(ctx):
