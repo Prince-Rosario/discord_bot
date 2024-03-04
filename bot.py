@@ -16,7 +16,8 @@ from spotipy.exceptions import SpotifyException
 from discord.ext import commands 
 from discord.ext import menus
 import sqlite3
-
+import datetime
+from discord import Embed, Colour
 
 load_dotenv()
 TOKEN: fnl[str] = os.getenv('DISCORD_TOKEN')
@@ -33,6 +34,20 @@ c.execute('''
         welcome_channel_id INTEGER
     )
 ''')
+
+def add_log_channel_column():
+    try:
+        c.execute('''
+            ALTER TABLE settings
+            ADD COLUMN log_channel_id INTEGER
+        ''')
+        conn.commit()
+        print('Log channel column added successfully')
+    except Exception as e:
+        print(f'Error adding log channel column: {e}')
+
+add_log_channel_column()
+
 
 
 def set_welcome_channel(guild_id, channel_id):
@@ -56,6 +71,28 @@ def get_welcome_channel(guild_id):
     result = c.fetchone()
     return result[0] if result else None
 
+
+def set_log_channel(guild_id, channel_id):
+    print(f'Setting log channel: guild_id={guild_id}, channel_id={channel_id}')
+    try:
+        c.execute('''
+            INSERT OR REPLACE INTO settings (guild_id, log_channel_id)
+            VALUES (?, ?)
+        ''', (guild_id, channel_id))
+        conn.commit()
+        print('Log channel set successfully')
+    except Exception as e:
+        print(f'Error setting log channel: {e}')
+
+def get_log_channel(guild_id):
+    c.execute('''
+        SELECT log_channel_id
+        FROM settings
+        WHERE guild_id = ?
+    ''', (guild_id,))
+    result = c.fetchone()
+    return result[0] if result else None
+
 def search_val_skin(skin_name):
     response = requests.get('https://valorant-api.com/v1/weapons/skins')
     data = response.json()
@@ -66,6 +103,22 @@ def search_val_skin(skin_name):
             matching_skins.append(skin)
 
     return matching_skins
+
+
+class LogChannelMenu(menus.Menu):
+    async def send_initial_message(self, ctx, channel):
+        return await channel.send('React with 📝 to set the current channel as the log channel.')
+
+    @menus.button('📝')
+    async def on_set_log_channel(self, payload):
+        set_log_channel(payload.guild_id, payload.channel_id)
+        await self.message.edit(content=f'Successfully set the log channel to <#{payload.channel_id}>.')
+
+
+
+
+
+
 
 
 '''todo: implement player stats'''
@@ -186,6 +239,11 @@ async def clear(ctx, limit=100):
 async def greet(ctx):
     await ctx.send('Hello! nan thaan leo dasu! !Help use pani na ena panuven nu therinjukko!')
 
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def log_channel_menu(ctx):
+    await LogChannelMenu().start(ctx)
+
 
 @bot.command()
 async def meme(ctx):
@@ -275,86 +333,79 @@ async def on_member_remove(member):
 
 
 @bot.event
+async def on_voice_state_update(member, before, after):
+    timestamp = datetime.datetime.now().strftime('%I:%M %p %d-%m-%Y')
+    log_channel_id = get_log_channel(member.guild.id)
+    if log_channel_id is not None:
+        log_channel = bot.get_channel(log_channel_id)
+        if log_channel is not None:
+            if after.channel is not None and after.channel.overwrites_for(member.guild.default_role).view_channel is False:
+                return
+            if before.channel is not None and before.channel.overwrites_for(member.guild.default_role).view_channel is False:
+                return
+            embed = Embed(colour=Colour.blue())
+            embed.set_author(name=member.name, icon_url=member.avatar.url)
+            if before.channel is None and after.channel is not None:
+                embed.title = 'Joined Voice Channel'
+                embed.description = f'{member.name} joined voice channel {after.channel.name} at {timestamp}'
+            elif before.channel is not None and after.channel is None:
+                embed.title = 'Left Voice Channel'
+                embed.description = f'{member.name} left voice channel {before.channel.name} at {timestamp}'
+            elif before.channel is not None and after.channel is not None:
+                embed.title = 'Moved Voice Channels'
+                embed.description = f'{member.name} moved from voice channel {before.channel.name} to {after.channel.name} at {timestamp}'
+            await log_channel.send(embed=embed)
+
+
+@bot.event
 async def on_member_update(before, after):
     if before.nick != after.nick:
-        print(f'{before.nick} changed their nickname to {after.nick}')
-
+        log_channel_id = get_log_channel(before.guild.id)
+        if log_channel_id is not None:
+            log_channel = bot.get_channel(log_channel_id)
+            if log_channel is not None:
+                embed = Embed(title='Nickname Changed', description=f'{before.nick} changed their nickname to {after.nick}', colour=Colour.blue())
+                await log_channel.send(embed=embed)
 
 @bot.event
 async def on_member_ban(guild, user):
-    print(f'{user.name} was banned from {guild.name}')
+    log_channel_id = get_log_channel(guild.id)
+    if log_channel_id is not None:
+        log_channel = bot.get_channel(log_channel_id)
+        if log_channel is not None:
+            embed = Embed(title='Member Banned', description=f'{user.name} was banned from {guild.name}', colour=Colour.blue())
+            await log_channel.send(embed=embed)
 
 @bot.event
 async def on_member_unban(guild, user):
-    print(f'{user.name} was unbanned from {guild.name}')
+    log_channel_id = get_log_channel(guild.id)
+    if log_channel_id is not None:
+        log_channel = bot.get_channel(log_channel_id)
+        if log_channel is not None:
+            embed = Embed(title='Member Unbanned', description=f'{user.name} was unbanned from {guild.name}', colour=Colour.blue())
+            await log_channel.send(embed=embed)
 
 @bot.event
 async def on_member_timeout(member):
-    print(f'{member.name} timed out')
+    log_channel_id = get_log_channel(member.guild.id)
+    if log_channel_id is not None:
+        log_channel = bot.get_channel(log_channel_id)
+        if log_channel is not None:
+            embed = Embed(title='Member Timed Out', description=f'{member.name} timed out', colour=Colour.blue())
+            await log_channel.send(embed=embed)
 
 @bot.event
 async def on_member_kick(member):
-    print(f'{member.name} was kicked')
-
+    log_channel_id = get_log_channel(member.guild.id)
+    if log_channel_id is not None:
+        log_channel = bot.get_channel(log_channel_id)
+        if log_channel is not None:
+            embed = Embed(title='Member Kicked', description=f'{member.name} was kicked', colour=Colour.blue())
+            await log_channel.send(embed=embed)
 
 
 #TODO: Implement Spotify playlist support
-'''
-@bot.command()
-async def playlist(ctx, *, playlist_url):
-    # Extract playlist ID from the URL
-    match = re.search(r'open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)', playlist_url)
-    if match:
-        playlist_id = match.group(1)
-    else:
-        await ctx.send('Invalid Spotify playlist URL.')
-        return
 
-    results = sp.playlist(playlist_id)
-    print(results)
-
-    tracks = []
-
-    if 'items' in results['tracks']:
-        tracks = [item['track'] for item in results['tracks']['items']]
-    else:
-        await ctx.send('No tracks found in the playlist.')
-
-    voice_channel = ctx.author.voice.channel
-    vc = await voice_channel.connect()
-
-    for item in tracks:
-        if isinstance(item, dict):
-            track_name = item['name']
-            track_artist = item['artists'][0]['name']
-        else:
-            print(f'unexpected track data: {item}')
-
-        ydl_opts = {
-            'default_search': 'ytsearch',
-            'quiet': True,
-            'format': 'bestaudio/best'
-        }
-
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(f'{track_name} {track_artist}', download=False)
-                if 'formats' in info:
-                    best_audio = max(info['entries'][0]['formats'], key=lambda format: format.get('abr', 0))
-                    url = best_audio['url']
-                else:
-                    await ctx.send(f'Error: No formats found for {track_name} by {track_artist} on YouTube.')
-                    continue
-
-        except yt_dlp.utils.DownloadError:
-            await ctx.send(f'Error: Could not find {track_name} by {track_artist} on YouTube.')
-            continue
-
-        vc.play(discord.FFmpegPCMAudio(executable="ffmpeg", source=url))
-        while vc.is_playing():
-            await asyncio.sleep(1)
-
-    await ctx.send(f'Playing {results["name"]} in {voice_channel}')'''
 
 video_titles = {}
 queues = {}
