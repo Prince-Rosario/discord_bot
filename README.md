@@ -9,7 +9,7 @@ Here's a list of commands that the bot can respond to:
 - **!hello / !hi**: Greets the user.
 - **!meme**: Sends a random meme.
 - **!ping**: Returns the latency.
-- **!insult**: Sends a random insult.
+- **!insult**: Sends a random insult (NSFW).
 - **!advice**: Sends a random piece of advice.
 - **!clear**: Clears the chat.
 - **!play**: Plays a song in the user's voice channel.
