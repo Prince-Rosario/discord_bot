@@ -1,8 +1,8 @@
 # discord_bot
 a simple discord bot with the listed func
 
-## Help
-List of available commands:
+## List of available commands:
+
 ### !hello / !hi
 Greets the user
 ### !meme
