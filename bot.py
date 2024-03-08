@@ -346,7 +346,7 @@ async def on_member_remove(member):
 
 @bot.event
 async def on_voice_state_update(member, before, after):
-    timestamp = int(datetime.datetime.now().timestamp())
+    timestamp = datetime.datetime.now()
     log_channel_id = get_log_channel(member.guild.id)
     if log_channel_id is not None:
         log_channel = bot.get_channel(log_channel_id)
@@ -365,16 +365,25 @@ async def on_voice_state_update(member, before, after):
             move_embed.set_author(name=member.name, icon_url=member.avatar.url)
             if before.channel is None and after.channel is not None:
                 join_embed.title = 'Joined Voice Channel'
-                join_embed.description = f'{member.name} joined voice channel {after.channel.name} at <t:{timestamp}:F>'
+                join_embed.description = f'{member.name} joined voice channel {after.channel.name} at {format_time(timestamp)}'
                 await log_channel.send(embed=join_embed)
             elif before.channel is not None and after.channel is None:
                 left_embed.title = 'Left Voice Channel'
-                left_embed.description = f'{member.name} left voice channel {before.channel.name} at <t:{timestamp}:F>'
+                left_embed.description = f'{member.name} left voice channel {before.channel.name} at {format_time(timestamp)}'
                 await log_channel.send(embed=left_embed)
             elif before.channel is not None and after.channel is not None:
                 move_embed.title = 'Moved Voice Channels'
-                move_embed.description = f'{member.name} moved from voice channel {before.channel.name} to {after.channel.name} at <t:{timestamp}:F>'
+                move_embed.description = f'{member.name} moved from voice channel {before.channel.name} to {after.channel.name} at {format_time(timestamp)}'
                 await log_channel.send(embed=move_embed)
+
+def format_time(timestamp):
+    now = datetime.datetime.now()
+    if timestamp.date() == now.date():
+        return f'Today at <t:{int(timestamp.timestamp())}:t>'
+    elif timestamp.date() == now.date() - datetime.timedelta(days=1):
+        return f'Yesterday at <t:{int(timestamp.timestamp())}:t>'
+    else:
+        return f'<t:{int(timestamp.timestamp())}:F>'
 @bot.event
 async def on_member_update(before, after):
     if before.nick != after.nick:
