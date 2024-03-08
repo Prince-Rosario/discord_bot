@@ -355,6 +355,8 @@ async def on_voice_state_update(member, before, after):
                 return
             if before.channel is not None and before.channel.overwrites_for(member.guild.default_role).view_channel is False:
                 return
+            if before.channel == after.channel:  # Add this condition
+                return  # Return if the voice channel hasn't changed
             join_embed = discord.Embed(color=discord.Colour.blue())
             left_embed = discord.Embed(color=discord.Colour.red())
             move_embed = discord.Embed(color=discord.Colour.gold())
@@ -373,7 +375,6 @@ async def on_voice_state_update(member, before, after):
                 move_embed.title = 'Moved Voice Channels'
                 move_embed.description = f'{member.name} moved from voice channel {before.channel.name} to {after.channel.name} at <t:{timestamp}:F>'
                 await log_channel.send(embed=move_embed)
-
 @bot.event
 async def on_member_update(before, after):
     if before.nick != after.nick:
