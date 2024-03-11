@@ -315,6 +315,10 @@ async def valstats(ctx, *, player_name: str):
 async def welcome_channel_menu(ctx):
     await WelcomeChannelMenu().start(ctx)
 
+@bot.command()
+async def wish(ctx):
+    await ctx.send('Thirumana Valzhthukkal HariHaran! Pathirikkai vikadhadhuku nandri 🙏')
+
 @bot.event
 async def on_member_join(member):
     channel_id = get_welcome_channel(member.guild.id)
