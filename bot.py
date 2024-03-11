@@ -317,7 +317,7 @@ async def welcome_channel_menu(ctx):
 
 @bot.command()
 async def wish(ctx):
-    await ctx.send('Thirumana Valzhthukkal HariHaran! Pathirikkai vikadhadhuku nandri 🙏')
+    await ctx.send('Thirumana Vazhthukkal HariHaran! Pathirikkai vaikadhadhuku nandri 🙏')
 
 @bot.event
 async def on_member_join(member):
