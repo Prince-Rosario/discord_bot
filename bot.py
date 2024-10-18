@@ -2,9 +2,10 @@ import asyncio
 import re
 from urllib.parse import urlparse
 import discord
+from discord import app_commands
+import discord.opus 
 import requests
 import json
-from discord.ext.commands import Bot
 from dotenv import load_dotenv
 import os
 from typing import Final as fnl
@@ -19,12 +20,19 @@ import sqlite3
 import datetime
 from discord import Embed, Colour
 
+intents = discord.Intents.default()
+client = discord.Client(intents=intents)
+tree = app_commands.CommandTree(client)
+
+
+if not discord.opus.is_loaded():
+    discord.opus.load_opus('/opt/homebrew/Cellar/opus/1.5.2/lib/libopus.0.dylib')
+
 load_dotenv()
 TOKEN: fnl[str] = os.getenv('DISCORD_TOKEN')
 
 sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=os.getenv('SPOTIPY_CLIENT_ID'),
                                                            client_secret=os.getenv('SPOTIPY_CLIENT_SECRET')))
-
 
 conn = sqlite3.connect('settings.db')
 c = conn.cursor()
@@ -48,8 +56,6 @@ def add_log_channel_column():
 
 add_log_channel_column()
 
-
-
 def set_welcome_channel(guild_id, channel_id):
     print(f'Setting welcome channel: guild_id={guild_id}, channel_id={channel_id}')
     try:
@@ -70,7 +76,6 @@ def get_welcome_channel(guild_id):
     ''', (guild_id,))
     result = c.fetchone()
     return result[0] if result else None
-
 
 def set_log_channel(guild_id, channel_id):
     print(f'Setting log channel: guild_id={guild_id}, channel_id={channel_id}')
@@ -104,7 +109,6 @@ def search_val_skin(skin_name):
 
     return matching_skins
 
-
 class LogChannelMenu(menus.Menu):
     async def send_initial_message(self, ctx, channel):
         return await channel.send('React with 📝 to set the current channel as the log channel.')
@@ -114,37 +118,6 @@ class LogChannelMenu(menus.Menu):
         set_log_channel(payload.guild_id, payload.channel_id)
         await self.message.edit(content=f'Successfully set the log channel to <#{payload.channel_id}>.')
 
-
-
-
-
-
-
-
-'''todo: implement player stats'''
-'''
-def get_val_player_stats(player_name):
-    KEY = os.getenv('VALPY-KEY')
-    val = valorant.Client(KEY, locale='en-US')
-    player = val.get_user_by_name(player_name)
-
-    matches = player.matchlist().history.fine(queueId='competitive')
-
-    if not matches:
-        return "No matches found"
-
-    stats = ""
-    for match in matches:
-        match_details = match.get()
-        for team in match_details.teams:
-            if team.winner:
-                stats += f"{team.teamId} Team's Ranks:\n"
-                players = match_details.players.get_all(teamId=team.teamId)
-                for player in players:
-                    stats += f"\t{player.gameName} - {player.rank}\n"
-    return stats
-'''    
-
 class WelcomeChannelMenu(menus.Menu):
     async def send_initial_message(self, ctx, channel):
         return await channel.send('React with 📝 to set the current channel as the welcome channel.')
@@ -153,7 +126,6 @@ class WelcomeChannelMenu(menus.Menu):
     async def on_set_welcome_channel(self, payload):
         set_welcome_channel(payload.guild_id, payload.channel_id)
         await self.message.edit(content=f'Successfully set the welcome channel to <#{payload.channel_id}>.')
-
 
 def get_meme():
     response = requests.get('https://meme-api.com/gimme')
@@ -172,7 +144,6 @@ def get_advice():
     response = requests.get('https://api.adviceslip.com/advice')
     json_data = json.loads(response.text)
     return json_data['slip']['advice']
-
 
 def get_random_usless_fact():
     response = requests.get('https://uselessfacts.jsph.pl/random.json?language=en')
@@ -197,7 +168,6 @@ def get_adop():
         print(f'Other error occurred: {err}') 
         return 'An unknown error occurred.'
 
-
 def get_nasa_images(query):
     try:
         params = {'q': query}
@@ -218,112 +188,113 @@ def get_nasa_images(query):
         print(f'Other error occurred: {err}') 
         return 'An unknown error occurred.'
 
-
-bot = Bot(command_prefix=os.getenv('DISCORD_PREFIX'), intents=discord.Intents.all())
-
-
-@bot.event
+@client.event
 async def on_ready():
-    print('Logged in as {0}!'.format(bot.user))
-    await bot.change_presence(activity=discord.Game(name="!Help for commands"))
+    print('Logged in as {0}!'.format(client.user))
+    await client.change_presence(activity=discord.Game(name="/help for commands"))
+    await tree.sync()  # Sync the command tree with Discord
 
-
-@bot.command()
-async def clear(ctx, limit=100):
-    await ctx.channel.purge(limit=limit)
+@tree.command(name="clear", description="Clears messages in the channel")
+async def clear(interaction: discord.Interaction, limit: int = 100):
+    await interaction.channel.purge(limit=limit)
     embed = discord.Embed(title=f'Deleted {limit} messages in this channel.')
-    await ctx.send(embed=embed)
+    await interaction.response.send_message(embed=embed)
 
+@tree.command(name="greet", description="Greets the user")
+async def greet(interaction: discord.Interaction):
+    await interaction.response.send_message('Hello! the name is Leo das! use /help to learn more!')
 
-@bot.command(aliases=['hello', 'hi'])
-async def greet(ctx):
-    await ctx.send('Hello! the name is Leo das! use !Help to learn more!')
+@tree.command(name="meme", description="Sends a random meme")
+async def meme(interaction: discord.Interaction):
+    await interaction.response.send_message(get_meme())
 
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def log_channel_menu(ctx):
-    await LogChannelMenu().start(ctx)
+@tree.command(name="insult", description="Sends a random insult")
+async def insult(interaction: discord.Interaction):
+    await interaction.response.send_message(get_insult())
 
+@tree.command(name="advice", description="Sends a random advice")
+async def advice(interaction: discord.Interaction):
+    await interaction.response.send_message(get_advice())
 
-@bot.command()
-async def meme(ctx):
-    await ctx.send(get_meme())
+@tree.command(name="fact", description="Sends a random useless fact")
+async def fact(interaction: discord.Interaction):
+    await interaction.response.send_message(get_random_usless_fact())
 
-@bot.command()
-async def insult(ctx):
-    await ctx.send(get_insult())  
+@tree.command(name="ping", description="Returns the latency")
+async def ping(interaction: discord.Interaction):
+    await interaction.response.send_message(f'Pong! {round(client.latency * 1000)}ms')
 
-@bot.command()
-async def advice(ctx):
-    await ctx.send(get_advice())
-
-@bot.command()
-async def fact(ctx):
-    await ctx.send(get_random_usless_fact())
-
-@bot.command()
-async def ping(ctx):
-    await ctx.send(f'Pong! {round(bot.latency * 1000)}ms')
-
-
-@bot.command()
-async def join(ctx):
-    if ctx.author.voice is None:
-        await ctx.send("You need to be in a voice channel to use this command.")
+@tree.command(name="join", description="Joins the user's voice channel")
+async def join(interaction: discord.Interaction):
+    if interaction.user.voice is None:
+        await interaction.response.send_message("You need to be in a voice channel to use this command.")
     else:
-        voice_channel = ctx.author.voice.channel
-        vc = await voice_channel.connect()
+        voice_channel = interaction.user.voice.channel
+        await voice_channel.connect()
+        await interaction.response.send_message(f"Joined {voice_channel}")
 
-
-@bot.command()
-async def leave(ctx):
-    if ctx.voice_client is None:
-        await ctx.send("I am not in a voice channel.")
+@tree.command(name="leave", description="Leaves the voice channel")
+async def leave(interaction: discord.Interaction):
+    if interaction.guild.voice_client is None:
+        await interaction.response.send_message("I am not in a voice channel.")
     else:
-        await ctx.voice_client.disconnect()
+        await interaction.guild.voice_client.disconnect()
+        await interaction.response.send_message("Left the voice channel")
 
+@tree.command(name="adop", description="Sends the Astronomy Picture of the Day")
+async def adop(interaction: discord.Interaction):
+    await interaction.response.send_message(get_adop())
 
-@bot.command()
-async def adop(ctx):
-    await ctx.send(get_adop())
+@tree.command(name="nasa", description="Searches for images on NASA's API")
+async def nasa(interaction: discord.Interaction, query: str):
+    await interaction.response.send_message(get_nasa_images(query))
 
-
-@bot.command()
-async def nasa(ctx, *, query: str):
-    await ctx.send(get_nasa_images(query))
-
-
-@bot.command()
-async def valskin(ctx, *, skin_name: str):
+@tree.command(name="valskin", description="Searches for Valorant skins")
+async def valskin(interaction: discord.Interaction, skin_name: str):
     skins = search_val_skin(skin_name)
     if skins:
         for skin in skins:
             embed = discord.Embed(title=skin['displayName'], color=0x00ff00)
             embed.set_image(url=skin['displayIcon'])  # Set the image
-            await ctx.send(embed=embed)
+            await interaction.response.send_message(embed=embed)
     else:
-        await ctx.send(f'No skin found for "{skin_name}".')
-'''
-@bot.command()
-async def valstats(ctx, *, player_name: str):
-    stats = get_val_player_stats(player_name)
-    await ctx.send(stats)'''
+        await interaction.response.send_message(f'No skin found for "{skin_name}".')
 
 
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def welcome_channel_menu(ctx):
-    await WelcomeChannelMenu().start(ctx)
 
-@bot.command()
-async def wish(ctx):
-    await ctx.send('Thirumana Vazhthukkal HariHaran! Pathirikkai vaikadhadhuku nandri 🙏')
+@tree.command(name="logchannel", description="Sets the log channel")
+async def logchannel(interaction: discord.Interaction):
+    menu = LogChannelMenu()
+    await menu.start(interaction)
 
-@bot.event
+@tree.command(name="welcomechannel", description="Sets the welcome channel")
+async def welcomechannel(interaction: discord.Interaction):
+    menu = WelcomeChannelMenu()
+    await menu.start(interaction)
+
+
+@tree.command(name="help", description="List of available commands")
+async def help_command(interaction: discord.Interaction):
+    embed = discord.Embed(title='Help', description='List of available commands:', color=0x014e9d)
+    embed.add_field(name='/greet', value='Greets the user', inline=False)
+    embed.add_field(name='/meme', value='Sends a random meme', inline=False)
+    embed.add_field(name='/ping', value='Returns the latency', inline=False)
+    embed.add_field(name='/insult', value='Sends a random insult', inline=False)
+    embed.add_field(name='/advice', value='Sends a random advice', inline=False)
+    embed.add_field(name='/clear', value='Clears the chat', inline=False)
+    embed.add_field(name='/join', value='Joins the user\'s voice channel', inline=False)
+    embed.add_field(name='/leave', value='Leaves the voice channel', inline=False)
+    embed.add_field(name='/adop', value='Sends the Astronomy Picture of the Day', inline=False)
+    embed.add_field(name='/nasa', value='Searches for images on NASA\'s API', inline=False)
+    embed.add_field(name='/valskin', value='Searches for Valorant skins', inline=False) 
+    embed.add_field(name='/fact', value='Sends a random useless fact', inline=False)                  
+    await interaction.response.send_message(embed=embed)
+
+@client.event
 async def on_member_join(member):
     channel_id = get_welcome_channel(member.guild.id)
     if channel_id:
-        channel = bot.get_channel(channel_id)
+        channel = client.get_channel(channel_id)
         if channel:
             embed = discord.Embed(
                 title="Welcome to the server!",
@@ -333,11 +304,11 @@ async def on_member_join(member):
             embed.set_thumbnail(url=member.avatar.url)
             await channel.send(embed=embed)
 
-@bot.event
+@client.event
 async def on_member_remove(member):
     channel_id = get_welcome_channel(member.guild.id)
     if channel_id:
-        channel = bot.get_channel(channel_id)
+        channel = client.get_channel(channel_id)
         if channel:
             embed = discord.Embed(
                 title="Goodbye!",
@@ -347,13 +318,12 @@ async def on_member_remove(member):
             embed.set_thumbnail(url=member.avatar.url)
             await channel.send(embed=embed)
 
-
-@bot.event
+@client.event
 async def on_voice_state_update(member, before, after):
     timestamp = datetime.datetime.now()
     log_channel_id = get_log_channel(member.guild.id)
     if log_channel_id is not None:
-        log_channel = bot.get_channel(log_channel_id)
+        log_channel = client.get_channel(log_channel_id)
         if log_channel is not None:
             if after.channel is not None and after.channel.overwrites_for(member.guild.default_role).view_channel is False:
                 return
@@ -388,74 +358,73 @@ def format_time(timestamp):
         return f'Yesterday at <t:{int(timestamp.timestamp())}:t>'
     else:
         return f'<t:{int(timestamp.timestamp())}:F>'
-@bot.event
+
+@client.event
 async def on_member_update(before, after):
     if before.nick != after.nick:
         log_channel_id = get_log_channel(before.guild.id)
         if log_channel_id is not None:
-            log_channel = bot.get_channel(log_channel_id)
+            log_channel = client.get_channel(log_channel_id)
             if log_channel is not None:
                 embed = Embed(title='Nickname Changed', description=f'{before.nick} changed their nickname to {after.nick}', colour=Colour.blue())
                 await log_channel.send(embed=embed)
 
-@bot.event
+@client.event
 async def on_member_ban(guild, user):
     log_channel_id = get_log_channel(guild.id)
     if log_channel_id is not None:
-        log_channel = bot.get_channel(log_channel_id)
+        log_channel = client.get_channel(log_channel_id)
         if log_channel is not None:
             embed = Embed(title='Member Banned', description=f'{user.name} was banned from {guild.name}', colour=Colour.blue())
             await log_channel.send(embed=embed)
 
-@bot.event
+@client.event
 async def on_member_unban(guild, user):
     log_channel_id = get_log_channel(guild.id)
     if log_channel_id is not None:
-        log_channel = bot.get_channel(log_channel_id)
+        log_channel = client.get_channel(log_channel_id)
         if log_channel is not None:
             embed = Embed(title='Member Unbanned', description=f'{user.name} was unbanned from {guild.name}', colour=Colour.blue())
             await log_channel.send(embed=embed)
 
-@bot.event
+@client.event
 async def on_member_timeout(member):
     log_channel_id = get_log_channel(member.guild.id)
     if log_channel_id is not None:
-        log_channel = bot.get_channel(log_channel_id)
+        log_channel = client.get_channel(log_channel_id)
         if log_channel is not None:
             embed = Embed(title='Member Timed Out', description=f'{member.name} timed out', colour=Colour.blue())
             await log_channel.send(embed=embed)
 
-@bot.event
+@client.event
 async def on_member_kick(member):
     log_channel_id = get_log_channel(member.guild.id)
     if log_channel_id is not None:
-        log_channel = bot.get_channel(log_channel_id)
+        log_channel = client.get_channel(log_channel_id)
         if log_channel is not None:
             embed = Embed(title='Member Kicked', description=f'{member.name} was kicked', colour=Colour.blue())
             await log_channel.send(embed=embed)
 
-
 #TODO: Implement Spotify playlist support
-
 
 video_titles = {}
 queues = {}
 
-@bot.command()
-async def play(ctx, *, track=None):
+@tree.command(name="play", description="Plays a song in the user's voice channel")
+async def play(interaction: discord.Interaction, track: str):
     if track is None:
-        await ctx.send("Please specify a song to play.")
+        await interaction.response.send_message("Please specify a song to play.")
         return
 
-    if ctx.author.voice is None:
-        await ctx.send("You need to be in a voice channel to use this command.")
+    if interaction.user.voice is None:
+        await interaction.response.send_message("You need to be in a voice channel to use this command.")
         return
     
-    voice_channel = ctx.author.voice.channel
-    if ctx.voice_client is None:
+    voice_channel = interaction.user.voice.channel
+    if interaction.guild.voice_client is None:
         vc = await voice_channel.connect()
     else:
-        vc = ctx.voice_client
+        vc = interaction.guild.voice_client
 
     ydl_opts = {
         'format': 'bestaudio/best',
@@ -482,22 +451,22 @@ async def play(ctx, *, track=None):
                 url = best_audio['url'] 
                 print(url)
             else:
-                await ctx.send(f'Error: No formats found for {track} on YouTube.')
+                await interaction.response.send_message(f'Error: No formats found for {track} on YouTube.')
                 return
     except yt_dlp.utils.DownloadError:
-        await ctx.send(f'Error: Could not find {track} on YouTube.')
+        await interaction.response.send_message(f'Error: Could not find {track} on YouTube.')
         return
 
-    if ctx.guild.id not in queues:
-        queues[ctx.guild.id] = []
-    queues[ctx.guild.id].append((url, video_title))   
+    if interaction.guild.id not in queues:
+        queues[interaction.guild.id] = []
+    queues[interaction.guild.id].append((url, video_title))   
 
     if not vc.is_playing():
-        await start_playing(ctx, ctx.guild.id, vc, voice_channel)
+        await start_playing(interaction, interaction.guild.id, vc, voice_channel)
 
 currently_playing = {}
 
-async def start_playing(ctx, guild_id, vc, voice_channel):
+async def start_playing(interaction, guild_id, vc, voice_channel):
     if not queues[guild_id]:  # If the queue is empty, return
         return
 
@@ -509,91 +478,66 @@ async def start_playing(ctx, guild_id, vc, voice_channel):
     def after_callback(e):
         if e:  # If an error occurred, print it out
             print(f'Error in playback: {e}')
-        coro = start_playing(ctx, guild_id, vc, voice_channel)  # Schedule the next song to play
-        fut = asyncio.run_coroutine_threadsafe(coro, bot.loop)
+        coro = start_playing(interaction, guild_id, vc, voice_channel)  # Schedule the next song to play
+        fut = asyncio.run_coroutine_threadsafe(coro, client.loop)
         try:
             fut.result()
         except:
             # an error was raised during the execution of the coroutine
             pass
 
-    vc.play(source, after=after_callback)
-    await ctx.send(f'Playing {video_title} in {voice_channel}')
-    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=f"{video_title}"))
+    try:
+        vc.play(source, after=after_callback)
+        await interaction.response.send_message(f'Playing {video_title} in {voice_channel}')
+        await client.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=f"{video_title}"))
+    except discord.opus.OpusNotLoaded:
+        await interaction.response.send_message("Opus library is not loaded. Please ensure it is installed and properly configured.")
 
-
-@bot.command()
-async def skip(ctx):
-    if ctx.voice_client is None:
-        await ctx.send("I am not in a voice channel.")
+@tree.command(name="skip", description="Skips the current song")
+async def skip(interaction: discord.Interaction):
+    if interaction.guild.voice_client is None:
+        await interaction.response.send_message("I am not in a voice channel.")
     else:
-        current_song = currently_playing.get(ctx.guild.id, "None")  # Get the currently playing song
-        ctx.voice_client.stop()
-        await ctx.send(f"Skipped {current_song} in {ctx.author.voice.channel}")
-        await start_playing(ctx, ctx.guild.id, ctx.voice_client, ctx.author.voice.channel)
+        current_song = currently_playing.get(interaction.guild.id, "None")  # Get the currently playing song
+        interaction.guild.voice_client.stop()
+        await interaction.response.send_message(f"Skipped {current_song} in {interaction.user.voice.channel}")
+        await start_playing(interaction, interaction.guild.id, interaction.guild.voice_client, interaction.user.voice.channel)
 
-@bot.command()
-async def queue(ctx):
-    if not queues.get(ctx.guild.id):
-        await ctx.send("The queue is empty.")
+@tree.command(name="queue", description="Displays the current queue")
+async def queue(interaction: discord.Interaction):
+    if not queues.get(interaction.guild.id):
+        await interaction.response.send_message("The queue is empty.")
     else:
-        queue_str = "\n".join([title for url, title in queues[ctx.guild.id]])
-        await ctx.send(f"Current queue:\n{queue_str}")
+        queue_str = "\n".join([title for url, title in queues[interaction.guild.id]])
+        await interaction.response.send_message(f"Current queue:\n{queue_str}")
 
-@bot.command()
-async def pause(ctx):
-    if ctx.voice_client is None:
-        await ctx.send("I am not in a voice channel.")
+@tree.command(name="pause", description="Pauses the song")
+async def pause(interaction: discord.Interaction):
+    if interaction.guild.voice_client is None:
+        await interaction.response.send_message("I am not in a voice channel.")
     else:
-        current_song = currently_playing.get(ctx.guild.id, "None")  # Get the currently playing song
-        ctx.voice_client.pause()
-        await ctx.send(f"Paused {current_song} in {ctx.author.voice.channel}")
+        current_song = currently_playing.get(interaction.guild.id, "None")  # Get the currently playing song
+        interaction.guild.voice_client.pause()
+        await interaction.response.send_message(f"Paused {current_song} in {interaction.user.voice.channel}")
 
-@bot.command()
-async def resume(ctx):
-    if ctx.voice_client is None:
-        await ctx.send("I am not in a voice channel.")
+@tree.command(name="resume", description="Resumes the song")
+async def resume(interaction: discord.Interaction):
+    if interaction.guild.voice_client is None:
+        await interaction.response.send_message("I am not in a voice channel.")
     else:
-        current_song = currently_playing.get(ctx.guild.id, "None")  # Get the currently playing song
-        ctx.voice_client.resume()
-        await ctx.send(f"Resumed {current_song} in {ctx.author.voice.channel}")
+        current_song = currently_playing.get(interaction.guild.id, "None") # Get the currently playing song
+        interaction.guild.voice_client.resume()
+        await interaction.response.send_message(f"Resumed {current_song} in {interaction.user.voice.channel}")
 
-@bot.command()
-async def stop(ctx):
-    if ctx.voice_client is None:
-        await ctx.send("I am not in a voice channel.")
+@tree.command(name="stop", description="Stops the song")
+async def stop(interaction: discord.Interaction):
+    if interaction.guild.voice_client is None:
+        await interaction.response.send_message("I am not in a voice channel.")
     else:
-        current_song = currently_playing.get(ctx.guild.id, "None")  # Get the currently playing song
-        queues[ctx.guild.id] = []  # Clear the queue
-        ctx.voice_client.stop()
-        await ctx.send(f"Stopped {current_song} in {ctx.author.voice.channel}")
-        await bot.change_presence(activity=discord.Game(name="!Help for commands"))
-
-
-@bot.command()
-async def Help(ctx):
-    embed = discord.Embed(title='Help', description='List of available commands:', color=0x014e9d)
-    embed.add_field(name='!hello / !hi', value='Greets the user', inline=False)
-    embed.add_field(name='!meme', value='Sends a random meme', inline=False)
-    embed.add_field(name='!ping', value='Returns the latency', inline=False)
-    embed.add_field(name='!insult', value='Sends a random insult', inline=False)
-    embed.add_field(name='!advice', value='Sends a random advice', inline=False)
-    embed.add_field(name='!clear', value='Clears the chat', inline=False)
-    embed.add_field(name='!play', value='Plays a song in the user\'s voice channel', inline=False)
-    embed.add_field(name='!pause', value='Pauses the song', inline=False)
-    embed.add_field(name='!resume', value='Resumes the song', inline=False)
-    embed.add_field(name='!skip', value='Skips the current song', inline=False)
-    embed.add_field(name='!queue', value='Displays the current queue', inline=False)
-    embed.add_field(name='!stop', value='Stops the song', inline=False)
-    embed.add_field(name='!join', value='Joins the user\'s voice channel', inline=False)
-    embed.add_field(name='!leave', value='Leaves the voice channel', inline=False)
-    embed.add_field(name='!adop', value='Sends the Astronomy Picture of the Day', inline=False)
-    embed.add_field(name='!nasa', value='Searches for images on NASA\'s API', inline=False)
-    embed.add_field(name='!valskin', value='Searches for Valorant skins', inline=False) 
-    embed.add_field(name='!fact', value='Sends a random useless fact', inline=False)
-    embed.add_field(name='!welcome_channel_menu', value='Sets the welcome channel', inline=False)
-    embed.add_field(name='!log_channel_menu', value='Sets the log channel', inline=False)
-    await ctx.send(embed=embed)
-
-
-bot.run(TOKEN)
+        current_song = currently_playing.get(interaction.guild.id, "None") # Get the currently playing song
+        queues[interaction.guild.id] = [] # Clear the queue
+        interaction.guild.voice_client.stop()
+        await interaction.response.send_message(f"Stopped {current_song} in {interaction.user.voice.channel}")
+        await client.change_presence(activity=discord.Game(name="/help for commands"))
+client.run(TOKEN)
+       
