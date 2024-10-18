@@ -19,14 +19,17 @@ from discord.ext import menus
 import sqlite3
 import datetime
 from discord import Embed, Colour
+import platform
 
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
 
-if not discord.opus.is_loaded():
-    discord.opus.load_opus('/opt/homebrew/Cellar/opus/1.5.2/lib/libopus.0.dylib')
+if platform.system() == 'Linux':
+    discord.opus.load_opus('/usr/lib/x86_64-linux-gnu/libopus.so.0')
+else:
+    discord.opus.load_opus('/opt/homebrew/Cellar/opus/1.5.2/lib/libopus.0.dylib')    
 
 load_dotenv()
 TOKEN: fnl[str] = os.getenv('DISCORD_TOKEN')
