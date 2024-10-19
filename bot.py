@@ -462,15 +462,15 @@ async def play(interaction: discord.Interaction, track: str):
             vc = interaction.guild.voice_client
 
         ###Path to your cookies file
-        #cookies_file_path = '/Users/prince/Downloads/cookies.txt'  # Update with the actual path to your cookies file
-
+        cookies_file_path = os.path.join(os.path.dirname(__file__), 'cookies.txt')
+        print(cookies_file_path)
         ydl_opts = {
             'format': 'bestaudio/best',
             'noplaylist': True,
             'quiet': True,
             'geo_bypass': True,
             'nocheckcertificate': True,
-            #'cookiefile': cookies_file_path  # Add the cookies file here
+            'cookiefile': cookies_file_path  # Add the cookies file here
         }
 
         if urlparse(track).scheme and urlparse(track).netloc:
