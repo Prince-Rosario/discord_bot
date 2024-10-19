@@ -267,8 +267,23 @@ async def valskin(interaction: discord.Interaction, skin_name: str):
 
 @tree.command(name="logchannel", description="Sets the log channel")
 async def logchannel(interaction: discord.Interaction):
-    menu = LogChannelMenu()
-    await menu.start(interaction)
+    await interaction.response.send_message(
+        'React with 📝 to set the current channel as the log channel.'
+    )
+
+    # Fetch the message to add a reaction
+    message = await interaction.original_response()
+    await message.add_reaction('📝')
+
+    def check(reaction, user):
+        return user == interaction.user and str(reaction.emoji) == '📝'
+
+    try:
+        reaction, user = await client.wait_for('reaction_add', timeout=60.0, check=check)
+        set_log_channel(interaction.guild.id, interaction.channel.id)
+        await interaction.followup.send(f'Successfully set the log channel to <#{interaction.channel.id}>.')
+    except asyncio.TimeoutError:
+        await interaction.followup.send('You did not react in time.')
 
 @tree.command(name="welcomechannel", description="Sets the welcome channel")
 async def welcomechannel(interaction: discord.Interaction):
@@ -415,57 +430,68 @@ queues = {}
 
 @tree.command(name="play", description="Plays a song in the user's voice channel")
 async def play(interaction: discord.Interaction, track: str):
-    if track is None:
-        await interaction.response.send_message("Please specify a song to play.")
-        return
-
-    if interaction.user.voice is None:
-        await interaction.response.send_message("You need to be in a voice channel to use this command.")
-        return
-    
-    voice_channel = interaction.user.voice.channel
-    if interaction.guild.voice_client is None:
-        vc = await voice_channel.connect()
-    else:
-        vc = interaction.guild.voice_client
-
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'noplaylist': True,
-        'quiet': True,
-        'geo_bypass': True,
-        'nocheckcertificate': True
-    }
-
-    if urlparse(track).scheme and urlparse(track).netloc:
-        ydl_opts['default_search'] = ''
-        parsed_url = urlparse(track)
-        track = f'{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}'
-    else:
-        ydl_opts['default_search'] = 'ytsearch'
-
     try:
+        if track is None:
+            await interaction.response.send_message("Please specify a song to play.")
+            return
+
+        if interaction.user.voice is None:
+            await interaction.response.send_message("You need to be in a voice channel to use this command.")
+            return
+
+        # Defer the response to allow more time for processing
+        await interaction.response.defer(thinking=True)
+
+        voice_channel = interaction.user.voice.channel
+        if interaction.guild.voice_client is None:
+            vc = await voice_channel.connect()
+        else:
+            vc = interaction.guild.voice_client
+
+        ###Path to your cookies file
+        #cookies_file_path = '/Users/prince/Downloads/cookies.txt'  # Update with the actual path to your cookies file
+
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'noplaylist': True,
+            'quiet': True,
+            'geo_bypass': True,
+            'nocheckcertificate': True,
+            #'cookiefile': cookies_file_path  # Add the cookies file here
+        }
+
+        if urlparse(track).scheme and urlparse(track).netloc:
+            ydl_opts['default_search'] = ''
+            parsed_url = urlparse(track)
+            track = f'{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}'
+        else:
+            ydl_opts['default_search'] = 'ytsearch'
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f'{track}', download=False)
             
-            if 'entries' in info and len(info['entries']) > 0:  # check if 'entries' is not empty
+            if 'entries' in info and len(info['entries']) > 0:  # Check if 'entries' is not empty
                 video_title = info['entries'][0]['title']
                 best_audio = max(info['entries'][0]['formats'], key=lambda format: format.get('abr') or 0)
                 url = best_audio['url'] 
                 print(url)
             else:
-                await interaction.response.send_message(f'Error: No formats found for {track} on YouTube.')
+                await interaction.followup.send(f'Error: No formats found for {track} on YouTube.')
                 return
-    except yt_dlp.utils.DownloadError:
-        await interaction.response.send_message(f'Error: Could not find {track} on YouTube.')
-        return
 
-    if interaction.guild.id not in queues:
-        queues[interaction.guild.id] = []
-    queues[interaction.guild.id].append((url, video_title))   
+        if interaction.guild.id not in queues:
+            queues[interaction.guild.id] = []
+        queues[interaction.guild.id].append((url, video_title))   
 
-    if not vc.is_playing():
-        await start_playing(interaction, interaction.guild.id, vc, voice_channel)
+        if not vc.is_playing():
+            await start_playing(interaction, interaction.guild.id, vc, voice_channel)
+
+    except yt_dlp.utils.DownloadError as e:
+        await interaction.followup.send(f"Download error: {e}")
+        print(f"Download error: {e}")
+    except Exception as e:
+        await interaction.followup.send(f"An error occurred: {e}")
+        print(f"Error in play command: {e}")
 
 currently_playing = {}
 
@@ -486,15 +512,15 @@ async def start_playing(interaction, guild_id, vc, voice_channel):
         try:
             fut.result()
         except:
-            # an error was raised during the execution of the coroutine
+            # An error was raised during the execution of the coroutine
             pass
 
     try:
         vc.play(source, after=after_callback)
-        await interaction.response.send_message(f'Playing {video_title} in {voice_channel}')
+        await interaction.followup.send(f'Playing {video_title} in {voice_channel}')
         await client.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name=f"{video_title}"))
     except discord.opus.OpusNotLoaded:
-        await interaction.response.send_message("Opus library is not loaded. Please ensure it is installed and properly configured.")
+        await interaction.followup.send("Opus library is not loaded. Please ensure it is installed and properly configured.")
 
 @tree.command(name="skip", description="Skips the current song")
 async def skip(interaction: discord.Interaction):
