@@ -470,7 +470,8 @@ async def play(interaction: discord.Interaction, track: str):
             'quiet': True,
             'geo_bypass': True,
             'nocheckcertificate': True,
-            'cookiefile': cookies_file_path  # Add the cookies file here
+            'cookiefile': cookies_file_path,  # Add the cookies file here
+            'verbose': True
         }
 
         if urlparse(track).scheme and urlparse(track).netloc:
