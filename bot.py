@@ -256,10 +256,17 @@ async def nasa(interaction: discord.Interaction, query: str):
 async def valskin(interaction: discord.Interaction, skin_name: str):
     skins = search_val_skin(skin_name)
     if skins:
+        # Send the first response
+        first_skin = skins.pop(0)
+        embed = discord.Embed(title=first_skin['displayName'], color=0x00ff00)
+        embed.set_image(url=first_skin['displayIcon'])
+        await interaction.response.send_message(embed=embed)
+
+        # Send follow-up messages for the remaining skins
         for skin in skins:
             embed = discord.Embed(title=skin['displayName'], color=0x00ff00)
-            embed.set_image(url=skin['displayIcon'])  # Set the image
-            await interaction.response.send_message(embed=embed)
+            embed.set_image(url=skin['displayIcon'])
+            await interaction.followup.send(embed=embed)
     else:
         await interaction.response.send_message(f'No skin found for "{skin_name}".')
 
