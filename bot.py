@@ -199,9 +199,15 @@ async def on_ready():
 
 @tree.command(name="clear", description="Clears messages in the channel")
 async def clear(interaction: discord.Interaction, limit: int = 100):
-    await interaction.channel.purge(limit=limit)
-    embed = discord.Embed(title=f'Deleted {limit} messages in this channel.')
-    await interaction.response.send_message(embed=embed)
+    # Defer the response to prevent timeout
+    await interaction.response.defer()
+
+    # Purge messages
+    deleted = await interaction.channel.purge(limit=limit)
+
+    # Send a follow-up message with the result
+    embed = discord.Embed(title=f'Deleted {len(deleted)} messages in this channel.')
+    await interaction.followup.send(embed=embed)
 
 @tree.command(name="greet", description="Greets the user")
 async def greet(interaction: discord.Interaction):
