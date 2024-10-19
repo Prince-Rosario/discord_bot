@@ -510,6 +510,7 @@ currently_playing = {}
 
 async def start_playing(interaction, guild_id, vc, voice_channel):
     if not queues[guild_id]:  # If the queue is empty, return
+        await client.change_presence(activity=discord.Game(name="/help for commands"))  # Reset status
         return
 
     url, video_title = queues[guild_id].pop(0)
