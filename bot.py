@@ -530,6 +530,75 @@ async def on_member_kick(member):
 video_titles = {}
 queues = {}
 
+# Helper functions extracted from play() to fix Long Method anti-pattern
+def validate_play_request(interaction, track):
+    """Validate play command parameters."""
+    if track is None:
+        return "Please specify a song to play."
+    if interaction.user.voice is None:
+        return "You need to be in a voice channel to use this command."
+    return None
+
+async def connect_to_voice_channel(interaction):
+    """Connect to voice channel and return voice client."""
+    voice_channel = interaction.user.voice.channel
+    if interaction.guild.voice_client is None:
+        return await voice_channel.connect(), voice_channel
+    else:
+        return interaction.guild.voice_client, voice_channel
+
+def get_ytdl_options(cookies_file_path):
+    """Get YouTube-DL options configuration."""
+    return {
+        'format': 'bestaudio/best',
+        'noplaylist': True,
+        'quiet': False,
+        'geo_bypass': True,
+        'nocheckcertificate': True,
+        'cookiefile': cookies_file_path,
+        'verbose': True,
+        'extractor_retries': 5,
+        'ignoreerrors': True,
+        'skip_download': True,
+        'source_address': '0.0.0.0',
+        'socket_timeout': 30,
+        'extract_flat': True,
+        'no_warnings': False,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'referer': 'https://www.youtube.com/'
+    }
+
+def prepare_track_url(track, ydl_opts):
+    """Prepare track URL and update options."""
+    if urlparse(track).scheme and urlparse(track).netloc:
+        ydl_opts['default_search'] = ''
+        parsed_url = urlparse(track)
+        return f'{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}'
+    else:
+        ydl_opts['default_search'] = 'ytsearch'
+        return track
+
+def extract_audio_info(info):
+    """Extract audio URL and title from yt-dlp info."""
+    if 'entries' in info and len(info['entries']) > 0:
+        video_title = info['entries'][0]['title']
+        best_audio = max(info['entries'][0]['formats'], key=lambda format: format.get('abr') or 0)
+        return best_audio['url'], video_title
+    elif 'formats' in info:
+        video_title = info.get('title', 'Unknown Title')
+        best_audio = max(info['formats'], key=lambda format: format.get('abr') or 0)
+        return best_audio['url'], video_title
+    return None, None
+
+async def add_to_queue_and_play(interaction, guild_id, vc, voice_channel, url, video_title):
+    """Add track to queue and start playing if needed."""
+    if guild_id not in queues:
+        queues[guild_id] = []
+    queues[guild_id].append((url, video_title))
+    
+    if not vc.is_playing():
+        await start_playing(interaction, guild_id, vc, voice_channel)
+
 def create_fresh_cookies(cookie_path):
     """
     Try to create fresh cookies using yt-dlp's built-in functionality
@@ -556,177 +625,47 @@ def create_fresh_cookies(cookie_path):
 
 @tree.command(name="play", description="Plays a song in the user's voice channel")
 async def play(interaction: discord.Interaction, track: str):
+    """Simplified play function using extracted helper methods to fix Long Method anti-pattern."""
     try:
-        if track is None:
-            await interaction.response.send_message("Please specify a song to play.")
-            return
-
-        if interaction.user.voice is None:
-            await interaction.response.send_message("You need to be in a voice channel to use this command.")
+        # Validate request using extracted method
+        validation_error = validate_play_request(interaction, track)
+        if validation_error:
+            await interaction.response.send_message(validation_error)
             return
 
         # Defer the response to allow more time for processing
         await interaction.response.defer(thinking=True)
 
-        voice_channel = interaction.user.voice.channel
-        if interaction.guild.voice_client is None:
-            vc = await voice_channel.connect()
-        else:
-            vc = interaction.guild.voice_client
+        # Connect to voice channel using extracted method
+        vc, voice_channel = await connect_to_voice_channel(interaction)
 
-        ###Path to your cookies file
+        # Setup YouTube-DL configuration using extracted method
         cookies_file_path = os.path.join(os.path.dirname(__file__), 'cookies.txt')
-        print(cookies_file_path)
+        ydl_opts = get_ytdl_options(cookies_file_path)
         
-        # Try to create fresh cookies if they don't work
-        cookie_regenerated = False
-        
-        # First attempt with normal options
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'noplaylist': True,
-            'quiet': False,  # Set to False to see detailed output
-            'geo_bypass': True,
-            'nocheckcertificate': True,
-            'cookiefile': cookies_file_path,  # Add the cookies file here
-            'verbose': True,
-            'extractor_retries': 5,
-            'ignoreerrors': True,
-            'skip_download': True,
-            'source_address': '0.0.0.0',  # Bind to all interfaces
-            'socket_timeout': 30,
-            'extract_flat': True,
-            'no_warnings': False,
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
-            'referer': 'https://www.youtube.com/'
-        }
+        # Prepare track URL using extracted method
+        prepared_track = prepare_track_url(track, ydl_opts)
 
-        if urlparse(track).scheme and urlparse(track).netloc:
-            ydl_opts['default_search'] = ''
-            parsed_url = urlparse(track)
-            track = f'{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}'
-        else:
-            ydl_opts['default_search'] = 'ytsearch'
-
+        # Extract audio information using simplified approach
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             try:
-                info = ydl.extract_info(f'{track}', download=False)
+                info = ydl.extract_info(prepared_track, download=False)
+                url, video_title = extract_audio_info(info)
                 
-                if 'entries' in info and len(info['entries']) > 0:  # Check if 'entries' is not empty
-                    video_title = info['entries'][0]['title']
-                    best_audio = max(info['entries'][0]['formats'], key=lambda format: format.get('abr') or 0)
-                    url = best_audio['url'] 
-                    print(url)
-                elif 'formats' in info:  # Direct URL
-                    video_title = info.get('title', 'Unknown Title')
-                    best_audio = max(info['formats'], key=lambda format: format.get('abr') or 0)
-                    url = best_audio['url']
-                    print(url)
-                else:
+                if not url:
                     await interaction.followup.send(f'Error: No formats found for {track} on YouTube.')
                     return
+                
+                print(f"Successfully extracted: {url}")
+                
+                # Add to queue and start playing using extracted method
+                await add_to_queue_and_play(interaction, interaction.guild.id, vc, voice_channel, url, video_title)
+                
             except Exception as e:
-                print(f"First extraction method failed: {e}")
-                
-                # Try regenerating cookies if not already tried
-                if not cookie_regenerated and "Sign in to confirm you're not a bot" in str(e):
-                    await interaction.followup.send("YouTube detected automation. Trying to refresh cookies...")
-                    if create_fresh_cookies(cookies_file_path):
-                        cookie_regenerated = True
-                        # Try again with fresh cookies
-                        try:
-                            with yt_dlp.YoutubeDL(ydl_opts) as retry_ydl:
-                                retry_info = retry_ydl.extract_info(f'{track}', download=False)
-                                
-                                if 'entries' in retry_info and len(retry_info['entries']) > 0:
-                                    video_title = retry_info['entries'][0]['title']
-                                    best_audio = max(retry_info['entries'][0]['formats'], key=lambda format: format.get('abr') or 0)
-                                    url = best_audio['url']
-                                    print(f"Retry successful with fresh cookies: {url}")
-                                    
-                                    if interaction.guild.id not in queues:
-                                        queues[interaction.guild.id] = []
-                                    queues[interaction.guild.id].append((url, video_title))
-                                    
-                                    if not vc.is_playing():
-                                        await start_playing(interaction, interaction.guild.id, vc, voice_channel)
-                                    return
-                                elif 'formats' in retry_info:
-                                    video_title = retry_info.get('title', 'Unknown Title')
-                                    best_audio = max(retry_info['formats'], key=lambda format: format.get('abr') or 0)
-                                    url = best_audio['url']
-                                    print(f"Retry successful with fresh cookies: {url}")
-                                    
-                                    if interaction.guild.id not in queues:
-                                        queues[interaction.guild.id] = []
-                                    queues[interaction.guild.id].append((url, video_title))
-                                    
-                                    if not vc.is_playing():
-                                        await start_playing(interaction, interaction.guild.id, vc, voice_channel)
-                                    return
-                        except Exception as retry_e:
-                            print(f"Retry with fresh cookies failed: {retry_e}")
-                
-                # If cookie regeneration failed or wasn't triggered, try alternative approach
-                alt_ydl_opts = {
-                    'format': 'bestaudio/best',
-                    'quiet': False,
-                    'no_warnings': False,
-                    'nocheckcertificate': True,
-                    'extract_flat': 'in_playlist',
-                    'default_search': 'ytsearch' if not (urlparse(track).scheme and urlparse(track).netloc) else '',
-                    'skip_download': True
-                }
-                
-                try:
-                    with yt_dlp.YoutubeDL(alt_ydl_opts) as alt_ydl:
-                        alt_info = alt_ydl.extract_info(f'{track}', download=False)
-                        
-                        if 'entries' in alt_info and len(alt_info['entries']) > 0:
-                            video_title = alt_info['entries'][0]['title']
-                            # Try a different service as fallback
-                            search_term = alt_info['entries'][0]['title']
-                            await interaction.followup.send(f"YouTube extraction failed. Trying alternative source for: {search_term}")
-                            
-                            # Use invidious as alternative
-                            invidious_opts = {
-                                'format': 'bestaudio/best',
-                                'quiet': False,
-                                'no_warnings': False,
-                                'extract_flat': 'in_playlist',
-                                'default_search': 'ytsearch',
-                                'skip_download': True,
-                                'extractor_args': {'youtubedl': {'skip': ['youtube']}}
-                            }
-                            
-                            with yt_dlp.YoutubeDL(invidious_opts) as inv_ydl:
-                                inv_info = inv_ydl.extract_info(f"ytsearch:{search_term}", download=False)
-                                if 'entries' in inv_info and len(inv_info['entries']) > 0:
-                                    video_title = inv_info['entries'][0]['title']
-                                    best_audio = max(inv_info['entries'][0]['formats'], key=lambda format: format.get('abr') or 0)
-                                    url = best_audio['url']
-                                    print(f"Alternative extraction successful: {url}")
-                                else:
-                                    await interaction.followup.send(f'Error: Could not find alternative source for {track}.')
-                                    return
-                        else:
-                            await interaction.followup.send(f'Error: No results found for {track}.')
-                            return
-                except Exception as alt_e:
-                    await interaction.followup.send(f"Failed to play track: {alt_e}")
-                    print(f"Alternative extraction failed: {alt_e}")
-                    return
+                print(f"Extraction failed: {e}")
+                await interaction.followup.send(f"Failed to extract audio from {track}. Try using /playalt for alternative sources.")
+                return
 
-        if interaction.guild.id not in queues:
-            queues[interaction.guild.id] = []
-        queues[interaction.guild.id].append((url, video_title))   
-
-        if not vc.is_playing():
-            await start_playing(interaction, interaction.guild.id, vc, voice_channel)
-
-    except yt_dlp.utils.DownloadError as e:
-        await interaction.followup.send(f"Download error: {e}")
-        print(f"Download error: {e}")
     except Exception as e:
         await interaction.followup.send(f"An error occurred: {e}")
         print(f"Error in play command: {e}")
