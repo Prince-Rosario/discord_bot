@@ -14,7 +14,6 @@ import platform
 # Import our extracted modules
 from database_manager import DatabaseManager
 from api_manager import APIManager
-from music_manager import MusicManager
 from commands import BasicCommands, APICommands, SettingsCommands
 from guild_settings import GuildChannelPair
 
@@ -39,7 +38,6 @@ NASA_API_KEY: fnl[str] = os.getenv('NASA_API_KEY', 'DEMO_KEY')
 # Initialize managers
 db_manager = DatabaseManager()
 api_manager = APIManager(NASA_API_KEY)
-music_manager = MusicManager()
 
 # Initialize command modules
 basic_commands = BasicCommands(tree, client)
@@ -169,46 +167,28 @@ async def on_voice_state_update(member, before, after):
         await handle_voice_move(member, before.channel, after.channel, log_channel, timestamp)
 
 
-# Music commands - keeping these in main file for now as they're complex
+# Music commands - simplified versions (complex music functionality can be added later)
 @tree.command(name="play", description="Plays a song in the user's voice channel")
 async def play(interaction: discord.Interaction, track: str):
-    """Play music command using the MusicManager."""
-    try:
-        result = await music_manager.play_track(interaction, track)
-        if result['success']:
-            await interaction.followup.send(f"🎵 Added to queue: **{result['title']}**")
-        else:
-            await interaction.followup.send(f"❌ Error: {result['error']}")
-    except Exception as e:
-        print(f"Error in play command: {e}")
-        await interaction.followup.send("❌ An error occurred while trying to play the track.")
+    """Simplified play command - placeholder for future music functionality."""
+    await interaction.response.send_message(f"🎵 Music functionality for '{track}' will be implemented in future versions.")
 
 
 @tree.command(name="skip", description="Skips the current song")
 async def skip(interaction: discord.Interaction):
     """Skip current song."""
-    result = music_manager.skip_track(interaction.guild.id)
-    if result['success']:
-        await interaction.response.send_message(f"⏭️ Skipped: **{result['title']}**")
+    if interaction.guild.voice_client and interaction.guild.voice_client.is_playing():
+        interaction.guild.voice_client.stop()
+        await interaction.response.send_message("⏭️ Skipped current track.")
     else:
-        await interaction.response.send_message(f"❌ {result['error']}")
+        await interaction.response.send_message("❌ No song is currently playing.")
 
 
 @tree.command(name="queue", description="Displays the current queue")
 async def queue(interaction: discord.Interaction):
     """Display music queue."""
-    queue_info = music_manager.get_queue_info(interaction.guild.id)
     embed = discord.Embed(title="🎵 Music Queue", color=0x00ff00)
-    
-    if queue_info['current']:
-        embed.add_field(name="Now Playing", value=queue_info['current'], inline=False)
-    
-    if queue_info['upcoming']:
-        upcoming = '\n'.join([f"{i+1}. {track}" for i, track in enumerate(queue_info['upcoming'][:10])])
-        embed.add_field(name="Upcoming", value=upcoming, inline=False)
-    else:
-        embed.add_field(name="Upcoming", value="No tracks in queue", inline=False)
-    
+    embed.add_field(name="Status", value="Music queue functionality will be implemented in future versions.", inline=False)
     await interaction.response.send_message(embed=embed)
 
 
@@ -235,10 +215,11 @@ async def resume(interaction: discord.Interaction):
 @tree.command(name="stop", description="Stops the song")
 async def stop(interaction: discord.Interaction):
     """Stop music and clear queue."""
-    result = music_manager.stop_music(interaction.guild.id)
     if interaction.guild.voice_client:
         interaction.guild.voice_client.stop()
-    await interaction.response.send_message("⏹️ Stopped the music and cleared the queue.")
+        await interaction.response.send_message("⏹️ Stopped the music.")
+    else:
+        await interaction.response.send_message("❌ No music is currently playing.")
 
 
 if __name__ == "__main__":
