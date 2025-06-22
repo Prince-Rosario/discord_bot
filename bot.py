@@ -9,11 +9,11 @@ import json
 from dotenv import load_dotenv
 import os
 from typing import Final as fnl
-import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials
+
+
 # import youtube_dl
 import yt_dlp
-from spotipy.exceptions import SpotifyException
+
 from discord.ext import commands 
 from discord.ext import menus
 import sqlite3
@@ -36,8 +36,7 @@ else:
 load_dotenv()
 TOKEN: fnl[str] = os.getenv('DISCORD_TOKEN')
 
-sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(client_id=os.getenv('SPOTIPY_CLIENT_ID'),
-                                                           client_secret=os.getenv('SPOTIPY_CLIENT_SECRET')))
+
 
 conn = sqlite3.connect('settings.db')
 c = conn.cursor()
@@ -949,5 +948,6 @@ async def playdirect(interaction: discord.Interaction, track: str):
         await interaction.followup.send(f"Direct playback failed: {e}")
         print(f"Error in playdirect command: {e}")
 
-client.run(TOKEN)
+if __name__ == "__main__":
+    client.run(TOKEN)
        
