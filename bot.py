@@ -402,37 +402,73 @@ async def on_member_remove(member):
             embed.set_thumbnail(url=member.avatar.url)
             await channel.send(embed=embed)
 
+# Voice state update helper functions to reduce complexity
+def is_channel_hidden(channel, guild):
+    """Check if channel is hidden from default role."""
+    return channel and channel.overwrites_for(guild.default_role).view_channel is False
+
+def create_voice_embed(member, embed_type):
+    """Create standardized voice embed with member info."""
+    colors = {
+        'join': discord.Colour.blue(),
+        'leave': discord.Colour.red(), 
+        'move': discord.Colour.gold()
+    }
+    
+    embed = discord.Embed(color=colors.get(embed_type, discord.Colour.blue()))
+    embed.set_author(name=member.name, icon_url=member.avatar.url)
+    return embed
+
+async def handle_voice_join(member, after_channel, log_channel, timestamp):
+    """Handle member joining voice channel."""
+    embed = create_voice_embed(member, 'join')
+    embed.title = 'Joined Voice Channel'
+    embed.description = f'{member.name} joined voice channel {after_channel.name} at {format_time(timestamp)}'
+    await log_channel.send(embed=embed)
+
+async def handle_voice_leave(member, before_channel, log_channel, timestamp):
+    """Handle member leaving voice channel."""
+    embed = create_voice_embed(member, 'leave')
+    embed.title = 'Left Voice Channel'
+    embed.description = f'{member.name} left voice channel {before_channel.name} at {format_time(timestamp)}'
+    await log_channel.send(embed=embed)
+
+async def handle_voice_move(member, before_channel, after_channel, log_channel, timestamp):
+    """Handle member moving between voice channels."""
+    embed = create_voice_embed(member, 'move')
+    embed.title = 'Moved Voice Channels'
+    embed.description = f'{member.name} moved from voice channel {before_channel.name} to {after_channel.name} at {format_time(timestamp)}'
+    await log_channel.send(embed=embed)
+
 @client.event
 async def on_voice_state_update(member, before, after):
+    """Handle voice state updates with simplified conditional logic using guard clauses."""
     timestamp = datetime.datetime.now()
+    
+    # Early return guards to reduce nesting
     log_channel_id = get_log_channel(member.guild.id)
-    if log_channel_id is not None:
-        log_channel = client.get_channel(log_channel_id)
-        if log_channel is not None:
-            if after.channel is not None and after.channel.overwrites_for(member.guild.default_role).view_channel is False:
-                return
-            if before.channel is not None and before.channel.overwrites_for(member.guild.default_role).view_channel is False:
-                return
-            if before.channel == after.channel:  # Add this condition
-                return  # Return if the voice channel hasn't changed
-            join_embed = discord.Embed(color=discord.Colour.blue())
-            left_embed = discord.Embed(color=discord.Colour.red())
-            move_embed = discord.Embed(color=discord.Colour.gold())
-            join_embed.set_author(name=member.name, icon_url=member.avatar.url)
-            left_embed.set_author(name=member.name, icon_url=member.avatar.url)
-            move_embed.set_author(name=member.name, icon_url=member.avatar.url)
-            if before.channel is None and after.channel is not None:
-                join_embed.title = 'Joined Voice Channel'
-                join_embed.description = f'{member.name} joined voice channel {after.channel.name} at {format_time(timestamp)}'
-                await log_channel.send(embed=join_embed)
-            elif before.channel is not None and after.channel is None:
-                left_embed.title = 'Left Voice Channel'
-                left_embed.description = f'{member.name} left voice channel {before.channel.name} at {format_time(timestamp)}'
-                await log_channel.send(embed=left_embed)
-            elif before.channel is not None and after.channel is not None:
-                move_embed.title = 'Moved Voice Channels'
-                move_embed.description = f'{member.name} moved from voice channel {before.channel.name} to {after.channel.name} at {format_time(timestamp)}'
-                await log_channel.send(embed=move_embed)
+    if not log_channel_id:
+        return
+    
+    log_channel = client.get_channel(log_channel_id)
+    if not log_channel:
+        return
+    
+    # Skip hidden channels
+    if is_channel_hidden(after.channel, member.guild) or is_channel_hidden(before.channel, member.guild):
+        return
+    
+    # Skip if no actual channel change
+    if before.channel == after.channel:
+        return
+    
+    # Handle different voice state changes with extracted methods
+    if before.channel is None and after.channel is not None:
+        await handle_voice_join(member, after.channel, log_channel, timestamp)
+    elif before.channel is not None and after.channel is None:
+        await handle_voice_leave(member, before.channel, log_channel, timestamp)
+    elif before.channel is not None and after.channel is not None:
+        await handle_voice_move(member, before.channel, after.channel, log_channel, timestamp)
 
 def format_time(timestamp):
     now = datetime.datetime.now()
