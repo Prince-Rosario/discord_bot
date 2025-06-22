@@ -74,7 +74,7 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 @client.event
 async def on_member_join(member):
     """Handle member join events."""
-    welcome_channel_id = db_manager.get_guild_setting(member.guild.id, 'welcome_channel_id')
+    welcome_channel_id = db_manager.get_channel(member.guild.id, 'welcome_channel_id')
     if welcome_channel_id:
         welcome_channel = client.get_channel(welcome_channel_id)
         if welcome_channel:
@@ -86,7 +86,7 @@ async def on_member_join(member):
 @client.event
 async def on_member_remove(member):
     """Handle member leave events."""
-    welcome_channel_id = db_manager.get_guild_setting(member.guild.id, 'welcome_channel_id')
+    welcome_channel_id = db_manager.get_channel(member.guild.id, 'welcome_channel_id')
     if welcome_channel_id:
         welcome_channel = client.get_channel(welcome_channel_id)
         if welcome_channel:
@@ -142,7 +142,7 @@ async def on_voice_state_update(member, before, after):
     if before.channel == after.channel:
         return
     
-    log_channel_id = db_manager.get_guild_setting(member.guild.id, 'log_channel_id')
+    log_channel_id = db_manager.get_channel(member.guild.id, 'log_channel_id')
     if not log_channel_id:
         return
     

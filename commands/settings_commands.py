@@ -24,10 +24,10 @@ class SettingsCommands:
         async def welcomechannel(interaction: discord.Interaction):
             guild_channel = GuildChannelPair(interaction.guild.id, interaction.channel.id)
             
-            success = self.db_manager.set_guild_setting(
+            success = self.db_manager.set_channel(
                 guild_channel.guild_id, 
-                'welcome_channel_id', 
-                guild_channel.channel_id
+                guild_channel.channel_id,
+                'welcome_channel_id'
             )
             
             if success:
@@ -43,10 +43,10 @@ class SettingsCommands:
         async def logchannel(interaction: discord.Interaction):
             guild_channel = GuildChannelPair(interaction.guild.id, interaction.channel.id)
             
-            success = self.db_manager.set_guild_setting(
+            success = self.db_manager.set_channel(
                 guild_channel.guild_id, 
-                'log_channel_id', 
-                guild_channel.channel_id
+                guild_channel.channel_id,
+                'log_channel_id'
             )
             
             if success:
