@@ -599,29 +599,9 @@ async def add_to_queue_and_play(interaction, guild_id, vc, voice_channel, url, v
     if not vc.is_playing():
         await start_playing(interaction, guild_id, vc, voice_channel)
 
-def create_fresh_cookies(cookie_path):
-    """
-    Try to create fresh cookies using yt-dlp's built-in functionality
-    """
-    try:
-        print(f"Attempting to create fresh cookies at: {cookie_path}")
-        # Use yt-dlp to generate cookies
-        temp_opts = {
-            'quiet': False,
-            'verbose': True,
-            'cookiefile': cookie_path,
-            'cookiesfrombrowser': ('chrome',),  # Try to extract from Chrome
-            'skip_download': True
-        }
-        
-        with yt_dlp.YoutubeDL(temp_opts) as ydl:
-            # Just try to access a simple video to generate cookies
-            ydl.extract_info("https://www.youtube.com/watch?v=dQw4w9WgXcQ", download=False)
-            print("Successfully created fresh cookies")
-            return True
-    except Exception as e:
-        print(f"Error creating fresh cookies: {e}")
-        return False
+# Removed create_fresh_cookies() function - Speculative Generality anti-pattern
+# Complex cookie regeneration system removed following YAGNI principle
+# Simple cookie handling is sufficient for current requirements
 
 @tree.command(name="play", description="Plays a song in the user's voice channel")
 async def play(interaction: discord.Interaction, track: str):
